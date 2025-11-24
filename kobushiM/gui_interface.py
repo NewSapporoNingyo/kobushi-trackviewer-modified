@@ -28,6 +28,7 @@ import tkinter.font as font
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib import rcParams
+from matplotlib.transforms import Affine2D
 import matplotlib.gridspec
 import matplotlib.font_manager
 import numpy as np
@@ -413,6 +414,8 @@ class mainwindow(ttk.Frame):
         if self.stationpos_val.get():
             self.mplot.stationpoint_plane(self.ax_plane,labelplot=self.stationlabel_val.get())
         
+        trans = Affine2D().rotate_deg(90) + self.ax_plane.transData
+        self.ax_plane.transData = trans
         self.fig_canvas.draw()
     def draw_profileplot(self):
         self.ax_profile_g.cla()
