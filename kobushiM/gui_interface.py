@@ -257,17 +257,17 @@ class mainwindow(ttk.Frame):
         self.menu_option = tk.Menu(self.menubar)
         self.menu_help = tk.Menu(self.menubar)
         
-        self.menubar.add_cascade(menu=self.menu_file, label='ファイル')
-        self.menubar.add_cascade(menu=self.menu_option, label='オプション')
-        self.menubar.add_cascade(menu=self.menu_help, label='ヘルプ')
+        self.menubar.add_cascade(menu=self.menu_file, label='File')
+        self.menubar.add_cascade(menu=self.menu_option, label='Options')
+        self.menubar.add_cascade(menu=self.menu_help, label='Help')
         
-        self.menu_file.add_command(label='開く...', command=self.open_mapfile, accelerator='Control+O')
-        self.menu_file.add_command(label='リロード', command=self.reload_map, accelerator='F5')
+        self.menu_file.add_command(label='Open...', command=self.open_mapfile, accelerator='Control+O')
+        self.menu_file.add_command(label='Reload', command=self.reload_map, accelerator='F5')
         self.menu_file.add_separator()
-        self.menu_file.add_command(label='図を保存...', command=self.save_plots, accelerator='Control+S')
-        self.menu_file.add_command(label='軌道座標を保存...', command=self.save_trackdata)
+        self.menu_file.add_command(label='Save Image...', command=self.save_plots, accelerator='Control+S')
+        self.menu_file.add_command(label='Save Trackdata...', command=self.save_trackdata)
         self.menu_file.add_separator()
-        self.menu_file.add_command(label='終了', command=self.ask_quit, accelerator='Alt+F4')
+        self.menu_file.add_command(label='Exit', command=self.ask_quit, accelerator='Alt+F4')
         
         self.menu_option.add_command(label='座標制御点...', command=self.set_arbcpdist)
         self.menu_option.add_command(label='描画可能区間...', command=self.set_plotlimit)
@@ -276,8 +276,8 @@ class mainwindow(ttk.Frame):
         
         #self.menu_option.add_command(label='customdialog...', command=self.customdialog_test)
         
-        self.menu_help.add_command(label='ヘルプ...', command=self.open_webdocument)
-        self.menu_help.add_command(label='Kobushiについて...', command=self.aboutwindow)
+        self.menu_help.add_command(label='Help...', command=self.open_webdocument)
+        self.menu_help.add_command(label='About Kobushi...', command=self.aboutwindow)
         
         self.master['menu'] = self.menubar
     def bind_keyevent(self):
@@ -495,7 +495,7 @@ class mainwindow(ttk.Frame):
             self.draw_profileplot()
     def ask_quit(self, event=None, ask=True):
         if ask:
-            if tk.messagebox.askyesno(message='Kobushi Track Viewerを終了しますか？'):
+            if tk.messagebox.askyesno(message='Quit Kobushi Track Viewer?'):
                 self.quit()
         else:
             self.quit()

@@ -1,4 +1,4 @@
-# Kobushi trackviewer
+# Kobushi trackviewer(modified)
 
 Bve trainsim 5/6向けのマップファイルから、線路平面図・縦断面図を生成するPythonスクリプトです。
 
