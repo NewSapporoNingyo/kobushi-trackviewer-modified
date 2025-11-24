@@ -212,7 +212,7 @@ class mainwindow(ttk.Frame):
         self.ax_profile_g.tick_params(labelbottom=False, bottom=False)
         self.ax_profile_r.tick_params(labelleft=False, left=False)
         
-        self.plt_canvas_base = tk.Canvas(self.canvas_frame, bg="white", width=900, height=700)
+        self.plt_canvas_base = tk.Canvas(self.canvas_frame, bg="white", width=4000, height=3000)
         self.plt_canvas_base.grid(row = 0, column = 0)
         
         '''
@@ -523,7 +523,16 @@ class mainwindow(ttk.Frame):
         filepath = filedialog.asksaveasfilename(filetypes=[('portable network graphics (png)','*.png'), ('scalable vector graphics (svg)','*.svg'), ('any format','*')], defaultextension='*.*')
         if filepath != '':
             filepath = pathlib.Path(filepath)
+            original_size = self.fig_plane.get_size_inches()
+            original_dpi = self.fig_plane.get_dpi()
+            width_inch = 30000 / 500     # width(px)/dpi
+            height_inch = 40000 / 500    # height(px)/dpi
+            self.fig_plane.set_size_inches(width_inch, height_inch)
+            self.fig_plane.set_dpi(500)
             self.fig_plane.savefig(filepath.parent.joinpath(str(filepath.stem) + '' + str(filepath.suffix)))
+            self.fig_plane.set_size_inches(*original_size)
+            self.fig_plane.set_dpi(original_dpi)
+            self.fig_canvas.draw()
     def save_trackdata(self, event=None):
         filepath = filedialog.askdirectory(initialdir='./')
         if filepath != '':
