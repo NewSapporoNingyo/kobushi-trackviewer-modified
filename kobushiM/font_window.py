@@ -16,7 +16,7 @@
 
 import tkinter as tk
 from tkinter import ttk
-from matplotlib.font_manager import FontManager
+import tkinter.font as tkfont
 
 class FontControl():
     def __init__(self, master, mainwindow):
@@ -24,10 +24,9 @@ class FontControl():
         self.master= None
         self.parent = master
 
-        fm = FontManager()
-        self.mat_fonts = set(f.name for f in fm.ttflist)
-        self.mat_fonts.add('sans-serif')
-        self.fontname = 'sans-serif'
+        self.fonts = set(tkfont.families())
+        self.fonts.add('TkDefaultFont')
+        self.fontname = 'TkDefaultFont'
 
         
     def create_window(self,event=None):
@@ -41,7 +40,7 @@ class FontControl():
             self.frame.grid(sticky=(tk.N, tk.W, tk.E, tk.S))
             self.frame.columnconfigure(0,weight=1)
             self.frame.rowconfigure(0,weight=1)
-            self.combobox = ttk.Combobox(self.frame, width=30,values=sorted(self.mat_fonts))
+            self.combobox = ttk.Combobox(self.frame, width=30,values=sorted(self.fonts))
             self.combobox.grid(column=0,row=0)
             self.combobox.set(self.fontname)
 

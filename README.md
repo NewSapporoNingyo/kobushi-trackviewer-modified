@@ -13,7 +13,6 @@ pip install kobushi-trackviewer
 Kobushi本体と、動作に必要な下記パッケージが自動でインストールされます。
 
 * [numpy](https://numpy.org)
-* [matplotlib](https://matplotlib.org)
 * [scipy](https://www.scipy.org)
 * [lark](https://lark-parser.readthedocs.io/en/latest/)
 * [ttkwidgets](https://ttkwidgets.readthedocs.io/en/latest/)

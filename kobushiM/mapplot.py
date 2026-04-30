@@ -13,287 +13,319 @@
     See the License for the specific language governing permissions and
     limitations under the License.
 '''
+
 import numpy as np
-from . import trackcoordinate as tc
 from . import trackgenerator as tgen
-import matplotlib.transforms
-import pdb
 
 
 class Mapplot():
-    def __init__(self,env,cp_arbdistribution=None,unitdist_default=None):
-        if False:
-            pdb.set_trace()
+    def __init__(self, env, cp_arbdistribution=None, unitdist_default=None):
         self.environment = env
         self.environment.cp_arbdistribution = cp_arbdistribution
-        self.environment.cp_defaultrange = [0,0]
-        
-        trackgenerator = tgen.TrackGenerator(self.environment,unitdist_default=unitdist_default)
+        self.environment.cp_defaultrange = [0, 0]
+
+        trackgenerator = tgen.TrackGenerator(self.environment, unitdist_default=unitdist_default)
         self.environment.owntrack_pos = trackgenerator.generate_owntrack()
         self.environment.owntrack_curve = trackgenerator.generate_curveradius_dist()
-        
-        otgenerator = {}
+
         self.environment.othertrack_pos = {}
         for key in self.environment.othertrack.data.keys():
-            otgenerator[key] = tgen.OtherTrackGenerator(self.environment,key)
-            self.environment.othertrack_pos[key] = otgenerator[key].generate()
-            
+            self.environment.othertrack_pos[key] = tgen.OtherTrackGenerator(self.environment, key).generate()
+
         self.distrange = {}
-        self.distrange['plane'] = [min(self.environment.owntrack_pos[:,0]),max(self.environment.owntrack_pos[:,0])]
-        self.distrange['vertical'] = [min(self.environment.owntrack_pos[:,0]),max(self.environment.owntrack_pos[:,0])]
-        self.origin_angle = self.environment.owntrack_pos[self.environment.owntrack_pos[:,0] == min(self.environment.owntrack_pos[:,0])][0][4]
-        if (len(self.environment.station.position)>0):
+        self.distrange['plane'] = [
+            min(self.environment.owntrack_pos[:, 0]),
+            max(self.environment.owntrack_pos[:, 0])
+        ]
+        self.distrange['vertical'] = [
+            min(self.environment.owntrack_pos[:, 0]),
+            max(self.environment.owntrack_pos[:, 0])
+        ]
+        start_distance = min(self.environment.owntrack_pos[:, 0])
+        self.distance_origin = start_distance
+        self.height_origin = self.environment.owntrack_pos[
+            self.environment.owntrack_pos[:, 0] == start_distance
+        ][0][3]
+        self.origin_angle = self.environment.owntrack_pos[
+            self.environment.owntrack_pos[:, 0] == min(self.environment.owntrack_pos[:, 0])
+        ][0][4]
+
+        if len(self.environment.station.position) > 0:
             self.station_dist = np.array(list(self.environment.station.position.keys()))
-            self.station_pos = self.environment.owntrack_pos[np.isin(self.environment.owntrack_pos[:,0],self.station_dist)]
+            self.station_pos = self.environment.owntrack_pos[np.isin(self.environment.owntrack_pos[:, 0], self.station_dist)]
             self.nostation = False
         else:
+            self.station_dist = np.array([])
+            self.station_pos = np.array([])
             self.nostation = True
-    def plane(self, ax_pl, distmin = None, distmax = None, iswholemap = True, othertrack_list = None, ydim_expansion = None, ydim_offset=0):
-        owntrack = self.environment.owntrack_pos
-        if (distmin != None):
-            self.distrange['plane'][0] = distmin
-        if (distmax != None):
-            self.distrange['plane'][1] = distmax
-        # 描画区間の自軌道データを取り出す
-        owntrack = owntrack[owntrack[:,0] >= self.distrange['plane'][0]]
-        owntrack = owntrack[owntrack[:,0] <= self.distrange['plane'][1]]
-        # 始点での方位角に合わせて回転
-        self.origin_angle = owntrack[owntrack[:,0] == min(owntrack[:,0])][0][4]
-        owntrack = self.rotate_track(owntrack,-self.origin_angle)
-        
-        ax_pl.plot(owntrack[:,1],owntrack[:,2],color='black') # 自軌道描画
-        
-        # 他軌道描画
-        if othertrack_list != None:
-            for key in othertrack_list:
-                if key == '\\':
-                    key = ''
-                    # 渡された他軌道リストの要素がバックスラッシュなら''に置き換える。othertrack_window.py参照のこと。
-                othertrack = self.environment.othertrack_pos[key]
-                othertrack = othertrack[othertrack[:,0] >= self.environment.othertrack.cp_range[key]['min']]
-                othertrack = othertrack[othertrack[:,0] <= self.environment.othertrack.cp_range[key]['max']]
-                othertrack = othertrack[othertrack[:,0] >= self.distrange['plane'][0]]
-                othertrack = othertrack[othertrack[:,0] <= self.distrange['plane'][1]]
-                othertrack = self.rotate_track(othertrack,-self.origin_angle)
-                ax_pl.plot(othertrack[:,1],othertrack[:,2],color=self.environment.othertrack_linecolor[key]['current'])
-                
-        if iswholemap:
-            ax_pl.set_aspect('equal') # 全区間表示の場合は、アスペクト比1:1でオートレンジ設定
-        else:
-            ax_pl.set_aspect('auto')
-            windowratio =ax_pl.bbox.height/ax_pl.bbox.width # 平面図のアスペクト比を取得
-            plotdistance = max(owntrack[:,0]) - min(owntrack[:,0]) # 描画距離を算出
-            # 描画範囲始点の座標を求める
-            yminval = owntrack[0][2]
-            xminval = owntrack[0][1]
-            # 描画範囲設定
-            ax_pl.set_ylim(yminval-plotdistance*windowratio/(2*ydim_expansion)+ydim_offset,yminval + plotdistance*windowratio/(2*ydim_expansion)+ydim_offset)
-            ax_pl.set_xlim(xminval,xminval + plotdistance)
-            
-        ax_pl.invert_yaxis()
-    def vertical(self, ax_h, ax_r, distmin = None, distmax = None, othertrack_list = None, ylim = None):
-        owntrack = self.environment.owntrack_pos
-        owntrack_curve = self.environment.owntrack_curve
-        if (distmin != None):
-            self.distrange['vertical'][0] = distmin
-        if (distmax != None):
-            self.distrange['vertical'][1] = distmax
-        
-        
-        ot_ix = np.where((owntrack[:,0] >= self.distrange['vertical'][0])&(owntrack[:,0] <= self.distrange['vertical'][1]))[0]
-        if len(ot_ix) == 0:
-            ot_ix_min = max(np.where((owntrack[:,0] < self.distrange['vertical'][0]))[0])
-            ot_ix_max = min(np.where((owntrack[:,0] > self.distrange['vertical'][1]))[0])
-        else:
-            ot_ix_min = min(ot_ix)
-            ot_ix_max = max(ot_ix)
-        #print(ot_ix_min,ot_ix_max,owntrack[ot_ix_min],owntrack[ot_ix_max])
-        owntrack = owntrack[ot_ix_min:ot_ix_max]
-        
-        '''
-        otc_ix = np.where((owntrack_curve[:,0] >= self.distrange['vertical'][0])&(owntrack_curve[:,0] <= self.distrange['vertical'][1]))[0]
-        if len(otc_ix) == 0:
-            otc_ix_min = max(np.where((owntrack_curve[:,0] < self.distrange['vertical'][0]))[0])-1
-            otc_ix_max = min(np.where((owntrack_curve[:,0] > self.distrange['vertical'][1]))[0])+1
-        else:
-            otc_ix_min = min(otc_ix)
-            otc_ix_max = max(otc_ix)
-        owntrack_curve = owntrack_curve[otc_ix_min:otc_ix_max]
-        '''
-        # 他軌道描画
-        if othertrack_list != None:
-            for key in othertrack_list:
-                othertrack = self.environment.othertrack_pos[key]
-                othertrack = othertrack[othertrack[:,0] >= self.environment.othertrack.cp_range[key]['min']]
-                othertrack = othertrack[othertrack[:,0] <= self.environment.othertrack.cp_range[key]['max']]
-                othertrack = othertrack[othertrack[:,0] >= self.distrange['plane'][0]]
-                othertrack = othertrack[othertrack[:,0] <= self.distrange['plane'][1]]
-                othertrack = self.rotate_track(othertrack,-self.origin_angle)
-                ax_h.plot(othertrack[:,0],othertrack[:,3],color=self.environment.othertrack_linecolor[key]['current'])
-        
-        self.heightmax = max(owntrack[:,3])
-        self.heightmin = min(owntrack[:,3])
-        ax_h.plot(owntrack[:,0],owntrack[:,3],color='black')
-        ax_r.plot(owntrack_curve[:,0],np.sign(owntrack_curve[:,1]),lw=1,color='black')
-        
-        ax_r.set_ylim(-6.5,6.5)
-        if ylim == None:
-            if (self.heightmax - self.heightmin) != 0:
-                ax_h.set_ylim(self.heightmin - (self.heightmax - self.heightmin)*0.2,self.heightmax + (self.heightmax - self.heightmin)*0.1)
-            else:
-                ax_h.set_ylim()
-        else:
-            ax_h.set_ylim(ylim[0],ylim[1])
-            
-        ax_h.set_xlim(self.distrange['vertical'][0],self.distrange['vertical'][1])
-        ax_r.set_xlim(self.distrange['vertical'][0],self.distrange['vertical'][1])
 
-    def stationpoint_plane(self, ax_pl, labelplot = True):
-        if(not self.nostation):
-            stationpos = self.station_pos
-            stationpos = stationpos[stationpos[:,0] >= self.distrange['plane'][0]]
-            stationpos = stationpos[stationpos[:,0] <= self.distrange['plane'][1]]
-            
-            stationpos = self.rotate_track(stationpos,-self.origin_angle)
-            
-            if(len(stationpos)>0):
-                ax_pl.scatter(stationpos[:,1],stationpos[:,2], facecolor='white', edgecolors='black', zorder=10)
-                trans_offs = matplotlib.transforms.offset_copy(ax_pl.transData, x=8*1.2 ,y=8*1, units='dots')
-                
-                if(labelplot):
-                    for i in range(0,len(stationpos)):
-                        #ax_pl.annotate(environment.station.stationkey[environment.station.position[station_pos[i][0]]],xy=(station_pos[i][1],station_pos[i][2]), zorder=11)
-                        ax_pl.text(stationpos[i][1],stationpos[i][2], self.environment.station.stationkey[self.environment.station.position[stationpos[i][0]]], rotation=0, size=8,bbox=dict(boxstyle="square",ec='black',fc='white',), transform=trans_offs)
-    def stationpoint_height(self, ax_h, ax_s, labelplot = True):
-        if(not self.nostation):
-            stationpos = self.station_pos
-            stationpos = stationpos[stationpos[:,0] >= self.distrange['vertical'][0]]
-            stationpos = stationpos[stationpos[:,0] <= self.distrange['vertical'][1]]
-            
-            if(len(stationpos)>0):
-                height_max = max(stationpos[:,3])
-                height_min = min(stationpos[:,3])
-                
-                #station_marker_ypos = (height_max-height_min)*1.1+height_min
-                station_marker_ypos = self.heightmax
-                trans_offs = matplotlib.transforms.offset_copy(ax_s.transData, x=-8/2,y=8*1, units='dots')
-                for i in range(0,len(stationpos)):
-                    ax_h.plot([stationpos[i][0],stationpos[i][0]],[stationpos[i][3],station_marker_ypos],color='black',lw=1)
-                    #ax_h.scatter(self.station_pos[i][0],station_marker_ypos, facecolor='white', edgecolors='black', zorder=10)
-                    if(labelplot):
-                        #ax_h.text(stationpos[i][0],station_marker_ypos, self.environment.station.stationkey[self.environment.station.position[stationpos[i][0]]], rotation=90, size=8,bbox=dict(boxstyle="square",ec='black',fc='white',), transform=trans_offs)
-                        ax_s.text(stationpos[i][0],0, self.environment.station.stationkey[self.environment.station.position[stationpos[i][0]]], rotation=90, size=8,bbox=dict(boxstyle="square",ec='black',fc='white',), transform=trans_offs)
-    def gradient_value(self, ax_h, labelplot = True):
-        '''縦断面図へ勾配数値をプロットする
-        '''
-        def vertline():
-            # 勾配変化点へ垂直線を描画
-            pos_temp = owntrack[owntrack[:,0] == gradient_p.data[gradient_p.pointer['next']]['distance']][0]
-            ax_h.plot([pos_temp[0],pos_temp[0]],[gradline_min,pos_temp[3]],color='black',lw=1)
-        def gradval(pos_start=None, pos_end=None, value=None, doplot=labelplot):
-            # 勾配数値をプロット
-            if(doplot):
-                if(pos_end == None):
-                    pos_end = gradient_p.data[gradient_p.pointer['next']]['distance']
-                if(pos_start == None):
-                    pos_start = gradient_p.data[gradient_p.pointer['last']]['distance']
-                if(value == None):
-                    valuecontain = gradient_p.seekoriginofcontinuous(gradient_p.pointer['last'])
-                    if valuecontain != None:
-                        value = gradient_p.data[valuecontain]['value']
-                    else:
-                        value = 0
-                value = str(np.fabs(value)) if value != 0 else 'Lv.'
-                if (pos_start+pos_end)/2 > self.distrange['vertical'][0] and (pos_start+pos_end)/2 < self.distrange['vertical'][1]:
-                    ax_h.text((pos_start+pos_end)/2,gradline_min, value, rotation=90, size=6.5, transform=trans_offs)
-            
-        owntrack = self.environment.owntrack_pos
-        owntrack = owntrack[owntrack[:,0] >= self.distrange['vertical'][0]]
-        owntrack = owntrack[owntrack[:,0] <= self.distrange['vertical'][1]]
-        
-        gradient_p = tgen.TrackPointer(self.environment, 'gradient')
-        grad_last = 0
-        height_max = max(owntrack[:,3])
-        height_min = min(owntrack[:,3])
-        gradline_min = height_min - (height_max-height_min)*0.1
-        trans_offs = matplotlib.transforms.offset_copy(ax_h.transData, x=-8/2, units='dots')
-        
-        if(gradient_p.pointer['last'] == None and gradient_p.pointer['next'] != None): # 勾配要素が存在するかどうか判断
-            while gradient_p.pointer['next'] != None:
-                if (gradient_p.data[gradient_p.pointer['next']]['distance'] < self.distrange['vertical'][0]): # プロットする距離程範囲の下限までポインタを進める
-                    gradient_p.seeknext()
-                else:
-                    break
-            
-            while(gradient_p.pointer['next'] != None and gradient_p.data[gradient_p.pointer['next']]['distance'] <= self.distrange['vertical'][1]):
-                # 勾配区切り線の描画処理。変化開始点に描く。
-                if(gradient_p.pointer['last'] == None):
-                    vertline()
-                    gradval(pos_start = min(owntrack[:,0]),value=0)
-                else:
-                    if(gradient_p.data[gradient_p.pointer['next']]['flag'] == 'bt'):
-                        vertline()
-                        gradval()
-                    elif(gradient_p.data[gradient_p.pointer['next']]['flag'] == 'i'):
-                        if(gradient_p.data[gradient_p.seekoriginofcontinuous(gradient_p.pointer['next'])]['value'] == gradient_p.data[gradient_p.pointer['last']]['value']):
-                            vertline()
-                            gradval()
-                    elif(gradient_p.data[gradient_p.pointer['next']]['flag'] == ''):
-                        if(gradient_p.data[gradient_p.pointer['last']]['flag'] != 'bt'):
-                            vertline()
-                            gradval()
-                gradient_p.seeknext()
-        # 最終勾配制御点以降の勾配値をプロットする
-        if(gradient_p.pointer['last'] == None):
-            gradval(pos_end = max(owntrack[:,0]),pos_start = min(owntrack[:,0]),value=0)
+    def plane_data(self, distmin=None, distmax=None, othertrack_list=None):
+        if distmin is not None:
+            self.distrange['plane'][0] = distmin
+        if distmax is not None:
+            self.distrange['plane'][1] = distmax
+
+        owntrack = self._distance_filter(
+            self.environment.owntrack_pos,
+            self.distrange['plane'][0],
+            self.distrange['plane'][1])
+        if len(owntrack) == 0:
+            return {'owntrack': np.array([]), 'othertracks': [], 'stations': [], 'bounds': (-1, -1, 1, 1)}
+
+        self.origin_angle = owntrack[0][4]
+        owntrack = self.rotate_track(owntrack, -self.origin_angle)
+
+        othertracks = []
+        if othertrack_list is not None:
+            for key in othertrack_list:
+                key = '' if key == '\\' else key
+                othertrack = self.environment.othertrack_pos[key]
+                othertrack = self._distance_filter(
+                    othertrack,
+                    max(self.environment.othertrack.cp_range[key]['min'], self.distrange['plane'][0]),
+                    min(self.environment.othertrack.cp_range[key]['max'], self.distrange['plane'][1]))
+                if len(othertrack) > 0:
+                    othertracks.append({
+                        'key': key,
+                        'points': self.rotate_track(othertrack, -self.origin_angle),
+                        'color': self.environment.othertrack_linecolor[key]['current']
+                    })
+
+        stations = self._station_points('plane')
+        if len(stations) > 0:
+            stations = self.rotate_track(stations, -self.origin_angle)
+
+        bounds = self._bounds([owntrack] + [track['points'] for track in othertracks])
+        return {
+            'owntrack': owntrack,
+            'othertracks': othertracks,
+            'stations': self._station_labels(stations),
+            'bounds': bounds
+        }
+
+    def profile_data(self, distmin=None, distmax=None, othertrack_list=None, ylim=None):
+        if distmin is not None:
+            self.distrange['vertical'][0] = distmin
+        if distmax is not None:
+            self.distrange['vertical'][1] = distmax
+
+        owntrack = self._distance_filter(
+            self.environment.owntrack_pos,
+            self.distrange['vertical'][0],
+            self.distrange['vertical'][1])
+        owntrack = owntrack.copy()
+        if len(owntrack) > 0:
+            owntrack[:, 3] = owntrack[:, 3] - self.height_origin
+        curve = self._distance_filter(
+            self.environment.owntrack_curve,
+            self.distrange['vertical'][0],
+            self.distrange['vertical'][1])
+        if len(owntrack) == 0:
+            return {'owntrack': np.array([]), 'curve': np.array([]), 'othertracks': [], 'stations': [], 'gradient_labels': [], 'radius_labels': [], 'bounds': (-1, -1, 1, 1)}
+
+        othertracks = []
+        if othertrack_list is not None:
+            for key in othertrack_list:
+                key = '' if key == '\\' else key
+                othertrack = self.environment.othertrack_pos[key]
+                othertrack = self._distance_filter(
+                    othertrack,
+                    max(self.environment.othertrack.cp_range[key]['min'], self.distrange['vertical'][0]),
+                    min(self.environment.othertrack.cp_range[key]['max'], self.distrange['vertical'][1]))
+                if len(othertrack) > 0:
+                    othertrack = othertrack.copy()
+                    othertrack[:, 3] = othertrack[:, 3] - self.height_origin
+                    othertracks.append({
+                        'key': key,
+                        'points': othertrack,
+                        'color': self.environment.othertrack_linecolor[key]['current']
+                    })
+
+        if ylim is None:
+            heightmin = min(owntrack[:, 3])
+            heightmax = max(owntrack[:, 3])
+            if heightmax != heightmin:
+                ymin = heightmin - (heightmax - heightmin) * 0.2
+                ymax = heightmax + (heightmax - heightmin) * 0.1
+            else:
+                ymin = heightmin - 5
+                ymax = heightmax + 5
         else:
-            gradval(pos_end = max(owntrack[:,0]))
-    def radius_value(self, ax_r, labelplot = True):
-        '''縦断面図へ曲線半径をプロットする
-        '''
-        def pltval(pos_start=None, pos_end=None, value=None, doplot=labelplot):
-            if(doplot):
-                if(pos_end == None):
-                    pos_end = rad_p.data[rad_p.pointer['next']]['distance']
-                if(pos_start == None):
-                    pos_start = rad_p.data[rad_p.pointer['last']]['distance']
-                if(value == None):
-                    value = rad_p.data[rad_p.seekoriginofcontinuous(rad_p.pointer['last'])]['value']
-                if(value != 0):
-                    if (pos_start+pos_end)/2 > self.distrange['vertical'][0] and (pos_start+pos_end)/2 < self.distrange['vertical'][1]:
-                        ax_r.text((pos_start+pos_end)/2,1.2*np.sign(value), '{:.0f}'.format(np.fabs(value)), rotation=90, size=6.5, transform=trans_offs, va='bottom' if np.sign(value) > 0 else 'top')
-        
-        owntrack = self.environment.owntrack_pos
-        owntrack = owntrack[owntrack[:,0] >= self.distrange['vertical'][0]]
-        owntrack = owntrack[owntrack[:,0] <= self.distrange['vertical'][1]]
-        
-        rad_p = tgen.TrackPointer(self.environment, 'radius')
-        trans_offs = matplotlib.transforms.offset_copy(ax_r.transData, x=-8/2, units='dots')
-        
-        while rad_p.pointer['next'] != None:
-            if(rad_p.data[rad_p.pointer['next']]['distance'] < self.distrange['vertical'][0]):
-                rad_p.seeknext()
+            ymin, ymax = ylim
+
+        curve_points = []
+        if len(curve) > 0:
+            curve_points = np.array([[row[0], np.sign(row[1])] for row in curve])
+
+        station_points = self._station_points('vertical')
+        station_points = station_points.copy()
+        if len(station_points) > 0:
+            station_points[:, 3] = station_points[:, 3] - self.height_origin
+        station_labels = self._station_labels(station_points)
+        gradient_labels = self.gradient_labels(ymin)
+        gradient_points = self.gradient_change_points(owntrack, ymin)
+        radius_labels = self.radius_labels(0, 1)
+        profile_bounds = (
+            self.distrange['vertical'][0],
+            ymin,
+            self.distrange['vertical'][1],
+            ymax)
+        radius_bounds = (
+            self.distrange['vertical'][0],
+            -2.2,
+            self.distrange['vertical'][1],
+            2.2)
+
+        return {
+            'owntrack': owntrack,
+            'curve': curve_points,
+            'othertracks': othertracks,
+            'stations': station_labels,
+            'gradient_labels': gradient_labels,
+            'gradient_points': gradient_points,
+            'radius_labels': radius_labels,
+            'station_top': ymax,
+            'bounds': profile_bounds,
+            'radius_bounds': radius_bounds
+        }
+
+    def gradient_change_points(self, owntrack, target_y):
+        points = []
+        if len(owntrack) == 0:
+            return points
+        gradient_distances = sorted(set(
+            item['distance'] for item in self.environment.own_track.data
+            if item['key'] == 'gradient'
+        ))
+        for distance in gradient_distances:
+            if self.distrange['vertical'][0] <= distance <= self.distrange['vertical'][1]:
+                z = np.interp(distance, owntrack[:, 0], owntrack[:, 3])
+                points.append({'x': distance, 'z': z, 'target_y': target_y})
+        return points
+
+    def gradient_labels(self, ypos):
+        labels = []
+        pointer = tgen.TrackPointer(self.environment, 'gradient')
+        owntrack = self._distance_filter(
+            self.environment.owntrack_pos,
+            self.distrange['vertical'][0],
+            self.distrange['vertical'][1])
+        if len(owntrack) == 0:
+            return labels
+
+        def append_label(pos_start=None, pos_end=None, value=None):
+            if pos_end is None:
+                pos_end = pointer.data[pointer.pointer['next']]['distance']
+            if pos_start is None:
+                pos_start = pointer.data[pointer.pointer['last']]['distance']
+            if value is None:
+                valuecontain = pointer.seekoriginofcontinuous(pointer.pointer['last'])
+                value = pointer.data[valuecontain]['value'] if valuecontain is not None else 0
+            mid = (pos_start + pos_end) / 2
+            if self.distrange['vertical'][0] < mid < self.distrange['vertical'][1]:
+                labels.append({'x': mid, 'y': ypos, 'text': str(np.fabs(value)) if value != 0 else 'Lv.'})
+
+        while pointer.pointer['next'] is not None:
+            if pointer.data[pointer.pointer['next']]['distance'] < self.distrange['vertical'][0]:
+                pointer.seeknext()
             else:
                 break
-        while(rad_p.pointer['next'] != None and rad_p.data[rad_p.pointer['next']]['distance'] <= self.distrange['vertical'][1]):
-            if(rad_p.pointer['last'] == None):
-                pass
+        while pointer.pointer['next'] is not None and pointer.data[pointer.pointer['next']]['distance'] <= self.distrange['vertical'][1]:
+            if pointer.pointer['last'] is None:
+                append_label(pos_start=min(owntrack[:, 0]), value=0)
+            elif pointer.data[pointer.pointer['next']]['flag'] == 'bt':
+                append_label()
+            elif pointer.data[pointer.pointer['next']]['flag'] == 'i':
+                if pointer.data[pointer.seekoriginofcontinuous(pointer.pointer['next'])]['value'] == pointer.data[pointer.pointer['last']]['value']:
+                    append_label()
+            elif pointer.data[pointer.pointer['next']]['flag'] == '':
+                if pointer.data[pointer.pointer['last']]['flag'] != 'bt':
+                    append_label()
+            pointer.seeknext()
+        if pointer.pointer['last'] is None:
+            append_label(pos_end=max(owntrack[:, 0]), pos_start=min(owntrack[:, 0]), value=0)
+        else:
+            append_label(pos_end=max(owntrack[:, 0]))
+        return labels
+
+    def radius_labels(self, ypos, yscale):
+        labels = []
+        pointer = tgen.TrackPointer(self.environment, 'radius')
+
+        def append_label(pos_start=None, pos_end=None, value=None):
+            if pos_end is None:
+                pos_end = pointer.data[pointer.pointer['next']]['distance']
+            if pos_start is None:
+                pos_start = pointer.data[pointer.pointer['last']]['distance']
+            if value is None:
+                value = pointer.data[pointer.seekoriginofcontinuous(pointer.pointer['last'])]['value']
+            if value != 0:
+                mid = (pos_start + pos_end) / 2
+                if self.distrange['vertical'][0] < mid < self.distrange['vertical'][1]:
+                    labels.append({'x': mid, 'y': ypos + np.sign(value) * yscale * 1.5, 'text': '{:.0f}'.format(np.fabs(value))})
+
+        while pointer.pointer['next'] is not None:
+            if pointer.data[pointer.pointer['next']]['distance'] < self.distrange['vertical'][0]:
+                pointer.seeknext()
             else:
-                if(rad_p.data[rad_p.pointer['next']]['flag'] == 'bt'):
-                    pltval()
-                elif(rad_p.data[rad_p.pointer['next']]['flag'] == 'i'):
-                    if(rad_p.data[rad_p.seekoriginofcontinuous(rad_p.pointer['next'])]['value'] == rad_p.data[rad_p.pointer['last']]['value']):
-                        pltval()
-                elif(rad_p.data[rad_p.pointer['next']]['flag'] == ''):
-                    if(rad_p.data[rad_p.pointer['last']]['flag'] != 'bt'):
-                        pltval()
-            rad_p.seeknext()
+                break
+        while pointer.pointer['next'] is not None and pointer.data[pointer.pointer['next']]['distance'] <= self.distrange['vertical'][1]:
+            if pointer.pointer['last'] is not None:
+                if pointer.data[pointer.pointer['next']]['flag'] == 'bt':
+                    append_label()
+                elif pointer.data[pointer.pointer['next']]['flag'] == 'i':
+                    if pointer.data[pointer.seekoriginofcontinuous(pointer.pointer['next'])]['value'] == pointer.data[pointer.pointer['last']]['value']:
+                        append_label()
+                elif pointer.data[pointer.pointer['next']]['flag'] == '':
+                    if pointer.data[pointer.pointer['last']]['flag'] != 'bt':
+                        append_label()
+            pointer.seeknext()
+        return labels
+
+    def _station_points(self, target):
+        if self.nostation:
+            return np.array([])
+        key = 'plane' if target == 'plane' else 'vertical'
+        stationpos = self.station_pos
+        stationpos = stationpos[stationpos[:, 0] >= self.distrange[key][0]]
+        stationpos = stationpos[stationpos[:, 0] <= self.distrange[key][1]]
+        return stationpos
+
+    def _station_labels(self, stationpos):
+        labels = []
+        if len(stationpos) == 0:
+            return labels
+        for row in stationpos:
+            station_key = self.environment.station.position[row[0]]
+            labels.append({
+                'distance': row[0],
+                'mileage': row[0] - self.distance_origin,
+                'name': self.environment.station.stationkey[station_key],
+                'point': row
+            })
+        return labels
+
+    def _distance_filter(self, data, distmin, distmax):
+        data = data[data[:, 0] >= distmin]
+        data = data[data[:, 0] <= distmax]
+        return data
+
+    def _bounds(self, tracks):
+        points = [track[:, 1:3] for track in tracks if len(track) > 0]
+        if len(points) == 0:
+            return (-1, -1, 1, 1)
+        points = np.vstack(points)
+        xmin = float(min(points[:, 0]))
+        xmax = float(max(points[:, 0]))
+        ymin = float(min(points[:, 1]))
+        ymax = float(max(points[:, 1]))
+        pad = max(xmax - xmin, ymax - ymin, 1) * 0.05
+        return (xmin - pad, ymin - pad, xmax + pad, ymax + pad)
+
     def rotate_track(self, input, angle):
         def rotate(tau1):
-            '''２次元回転行列を返す。
-            tau1: 回転角度 [rad]
-            '''
-            return np.array([[np.cos(tau1), -np.sin(tau1)], [np.sin(tau1),  np.cos(tau1)]])
+            return np.array([[np.cos(tau1), -np.sin(tau1)], [np.sin(tau1), np.cos(tau1)]])
+
         temp_i = input.T
-        temp_rot = np.dot(rotate(angle),np.vstack((temp_i[1],temp_i[2])))
-        return np.vstack((np.vstack((temp_i[0],temp_rot)),temp_i[3:])).T
+        temp_rot = np.dot(rotate(angle), np.vstack((temp_i[1], temp_i[2])))
+        return np.vstack((np.vstack((temp_i[0], temp_rot)), temp_i[3:])).T

@@ -25,22 +25,12 @@ import tkinter.filedialog as filedialog
 import tkinter.simpledialog as simpledialog
 import tkinter.font as font
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib import rcParams
-from matplotlib.transforms import Affine2D
-import matplotlib.gridspec
-import matplotlib.font_manager
 import numpy as np
-
-# https://qiita.com/yniji/items/3fac25c2ffa316990d0c matplotlibで日本語を使う
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = ['Hiragino Sans', 'Yu Gothic', 'Meirio', 'Takao', 'IPAexGothic', 'IPAPGothic', 'VL PGothic', 'Noto Sans CJK JP']
-
 
 from ._version import __version__
 from . import mapinterpreter as interp
 from . import mapplot
+from . import canvasplot
 from . import dialog_multifields
 from . import othertrack_window
 from . import font_window
@@ -98,26 +88,8 @@ class mainwindow(ttk.Frame):
         
         font_title = font.Font(weight='bold',size=10)
         
-        self.ydim_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.ydim_control.grid(column=0, row=0, sticky=(tk.S, tk.W, tk.E))
-        self.ydim_cont_label =  ttk.Label(self.ydim_control, text='Y軸拡大率', font = font_title)
-        self.ydim_cont_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
-        self.ydim_cont_val = tk.StringVar()
-        self.ydim_cont={}
-        i=1
-        for key in ['x0.5','x1','x2','x4', 'x8', 'x16']:
-            self.ydim_cont[key] = ttk.Radiobutton(self.ydim_control, text=key, variable=self.ydim_cont_val, value=key, command=self.plot_all)
-            self.ydim_cont[key].grid(column=0, row=i, sticky=(tk.N, tk.W, tk.E))
-            i +=1
-        self.ydim_cont_val.set('x1')
-        self.ydim_offset_label =  ttk.Label(self.ydim_control, text='Y軸オフセット', font = font_title)
-        self.ydim_offset_label.grid(column=0, row=10, sticky=(tk.N, tk.W, tk.E))
-        self.ydim_offset_val = tk.DoubleVar(value=0)
-        self.ydim_offset_entry = ttk.Entry(self.ydim_control, width=6, textvariable=self.ydim_offset_val)
-        self.ydim_offset_entry.grid(column=0, row=11, sticky=(tk.W))
-        
         self.aux_values_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.aux_values_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E))
+        self.aux_values_control.grid(column=0, row=0, sticky=(tk.S, tk.W, tk.E))
         self.aux_val_label =  ttk.Label(self.aux_values_control, text='補助情報', font = font_title)
         self.aux_val_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.stationpos_val = tk.BooleanVar(value=True)
@@ -126,36 +98,24 @@ class mainwindow(ttk.Frame):
         self.stationlabel_val = tk.BooleanVar(value=True)
         self.stationlabel_chk = ttk.Checkbutton(self.aux_values_control, text='駅名',onvalue=True, offvalue=False, variable=self.stationlabel_val, command=self.plot_all)
         self.stationlabel_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.stationmileage_val = tk.BooleanVar(value=True)
+        self.stationmileage_chk = ttk.Checkbutton(self.aux_values_control, text='Show station mileage',onvalue=True, offvalue=False, variable=self.stationmileage_val, command=self.plot_all)
+        self.stationmileage_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         self.gradientpos_val = tk.BooleanVar(value=True)
         self.gradientpos_chk = ttk.Checkbutton(self.aux_values_control, text='勾配変化点',onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
-        self.gradientpos_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
+        self.gradientpos_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.gradientval_val = tk.BooleanVar(value=True)
         self.gradientval_chk = ttk.Checkbutton(self.aux_values_control, text='勾配値',onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
-        self.gradientval_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
+        self.gradientval_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
         self.curveval_val = tk.BooleanVar(value=True)
         self.curveval_chk = ttk.Checkbutton(self.aux_values_control, text='曲線半径',onvalue=True, offvalue=False, variable=self.curveval_val, command=self.plot_all)
-        self.curveval_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
+        self.curveval_chk.grid(column=0, row=6, sticky=(tk.N, tk.W, tk.E))
         self.prof_othert_val = tk.BooleanVar(value=False)
         self.prof_othert_chk = ttk.Checkbutton(self.aux_values_control, text='縦断面図他軌道',onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
-        self.prof_othert_chk.grid(column=0, row=6, sticky=(tk.N, tk.W, tk.E))
+        self.prof_othert_chk.grid(column=0, row=7, sticky=(tk.N, tk.W, tk.E))
         
-        # 描画区間フレーム
-        self.distlimit_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.distlimit_control.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E))
-        self.distlimit_label =  ttk.Label(self.distlimit_control, text='描画区間', font = font_title)
-        self.distlimit_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.dist_range_sel = tk.StringVar(value='all')
-        self.dist_range_all = ttk.Radiobutton(self.distlimit_control, text='全範囲',variable=self.dist_range_sel, value='all', command=self.setdist_all)
-        self.dist_range_all.grid(column=0, row=1, sticky=(tk.W, tk.E))
-        self.dist_range_arb_frame = ttk.Frame(self.distlimit_control, padding='0 0 0 0')
-        self.dist_range_arb_frame.grid(column=0, row=2, sticky=(tk.W, tk.E))
-        self.dist_range_arb = ttk.Radiobutton(self.dist_range_arb_frame, text='',variable=self.dist_range_sel, value='arb', command=self.setdist_arbitrary)
-        self.dist_range_arb.grid(column=0, row=0, sticky=(tk.W, tk.E))
         self.dist_range_arb_val = tk.DoubleVar(value=500)
-        self.dist_range_arb_entry = ttk.Entry(self.dist_range_arb_frame, width=5, textvariable=self.dist_range_arb_val)
-        self.dist_range_arb_entry.grid(column=1, row=0, sticky=(tk.W))
-        self.distlimit_label =  ttk.Label(self.dist_range_arb_frame, text='m')
-        self.distlimit_label.grid(column=2, row=0, sticky=(tk.W))
         
         # ファイルパスフレーム
         self.file_frame = ttk.Frame(self, padding='3 3 3 3')
@@ -168,23 +128,9 @@ class mainwindow(ttk.Frame):
         
         self.setdist_frame = ttk.Frame(self, padding='3 3 3 3')
         self.setdist_frame.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E))
-        
-        self.setdist_entry_frame = ttk.Frame(self.setdist_frame, padding='0 0 0 0')
-        self.setdist_entry_frame.grid(column=0, row=0, sticky=(tk.W, tk.E))
-        self.distset_btn = ttk.Button(self.setdist_entry_frame, text="距離程セット", command=self.distset_entry, width=12)
-        self.distset_btn.grid(column=0, row=0, sticky=(tk.W))
-        self.setdist_entry_val = tk.DoubleVar()
-        self.setdist_entry = ttk.Entry(self.setdist_entry_frame, width=7, textvariable=self.setdist_entry_val)
-        self.setdist_entry.grid(column=1, row=0, sticky=(tk.W))
-        self.setdist_entry_label = ttk.Label(self.setdist_entry_frame, text='m')
-        self.setdist_entry_label.grid(column=2, row=0, sticky=(tk.W))
-        
-        # 距離程フレーム
-        self.distance_scale = ttk.Scale(self.setdist_frame, orient=tk.HORIZONTAL, from_=0, to=100, command=self.setdist_scale)#,length=500)
-        self.distance_scale.grid(column=1, row=0, sticky=(tk.W, tk.E))
-        
+
         self.stationlist_frame = ttk.Frame(self.setdist_frame, padding='0 0 0 0')
-        self.stationlist_frame.grid(column=2, row=0, sticky=(tk.E))
+        self.stationlist_frame.grid(column=0, row=0, sticky=(tk.E))
         self.stationlist_label = ttk.Label(self.stationlist_frame, text='駅移動', font = font_title)
         self.stationlist_label.grid(column=0, row=0, sticky=(tk.W))
         self.stationlist_val = tk.StringVar()
@@ -192,56 +138,30 @@ class mainwindow(ttk.Frame):
         self.stationlist_cb.grid(column=1, row=0, sticky=(tk.W, tk.E))
         self.stationlist_cb.bind('<<ComboboxSelected>>', self.jumptostation)
         
-        self.setdist_frame.columnconfigure(0, weight=0)
-        self.setdist_frame.columnconfigure(1, weight=1)
+        self.setdist_frame.columnconfigure(0, weight=1)
         self.setdist_frame.rowconfigure(0, weight=1)
         
         # プロットフレーム
         self.canvas_frame = ttk.Frame(self, padding='3 3 3 3')
         self.canvas_frame.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E, tk.S))
         
-        self.fig_plane = plt.figure(figsize=(9,7),tight_layout=True)
-        
-        gs1 = self.fig_plane.add_gridspec(nrows=2,ncols=1,height_ratios=[22, 13])
-        gs2 = gs1[1].subgridspec(nrows=3,ncols=1,height_ratios=[3, 6, 4],hspace=0)
-        self.ax_plane = self.fig_plane.add_subplot(gs1[0])
-        self.ax_profile_s = self.fig_plane.add_subplot(gs2[0])
-        self.ax_profile_g = self.fig_plane.add_subplot(gs2[1], sharex=self.ax_profile_s)
-        self.ax_profile_r = self.fig_plane.add_subplot(gs2[2], sharex=self.ax_profile_s)
-        
-        self.ax_profile_s.tick_params(labelleft=False, left=False, labelbottom=False, bottom=False)
-        self.ax_profile_g.tick_params(labelbottom=False, bottom=False)
-        self.ax_profile_r.tick_params(labelleft=False, left=False)
-        
-        self.plt_canvas_base = tk.Canvas(self.canvas_frame, bg="white", width=4000, height=3000)
-        self.plt_canvas_base.grid(row = 0, column = 0)
-        
-        '''
-        self.fig_xscroll = ttk.Scrollbar(self.canvas_frame, orient=tk.HORIZONTAL, command=self.plt_canvas_base.xview)
-        self.fig_xscroll.grid(row = 1, column = 0, sticky=(tk.N, tk.W, tk.E, tk.S))
-        self.fig_yscroll = ttk.Scrollbar(self.canvas_frame, orient=tk.VERTICAL, command=self.plt_canvas_base.yview)
-        self.fig_yscroll.grid(row = 0, column = 1, sticky=(tk.N, tk.W, tk.E, tk.S))
-        '''
-        def on_canvas_resize(event):
-            self.plt_canvas_base.itemconfigure(self.fig_frame_id, width=event.width, height=event.height)
-            #print(event)
-        
-        self.fig_frame = tk.Frame(self.plt_canvas_base)
-        self.fig_frame_id = self.plt_canvas_base.create_window((0, 0), window=self.fig_frame, anchor="nw")
-        self.fig_frame.columnconfigure(0, weight=1)
-        self.fig_frame.rowconfigure(0, weight=1)
-        #self.fig_frame.bind("<Configure>",lambda e: self.plt_canvas_base.configure(scrollregion=self.plt_canvas_base.bbox("all")))
-        self.plt_canvas_base.bind("<Configure>", on_canvas_resize)
-        #self.plt_canvas_base.configure(yscrollcommand=self.fig_yscroll.set, xscrollcommand=self.fig_xscroll.set)
-        
-        self.fig_canvas = FigureCanvasTkAgg(self.fig_plane, master=self.fig_frame)
-        self.fig_canvas.draw()
-        self.fig_canvas.get_tk_widget().grid(row=0, column=0, sticky='news')
+        self.plot_pane = ttk.PanedWindow(self.canvas_frame, orient=tk.VERTICAL)
+        self.plot_pane.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.plane_canvas = canvasplot.PlotCanvas(self.plot_pane, title='Plan', rotate_enabled=True, y_axis_down=True, scalebar=True)
+        self.profile_pane = ttk.PanedWindow(self.plot_pane, orient=tk.HORIZONTAL)
+        self.profile_canvas = canvasplot.PlotCanvas(
+            self.profile_pane, title='Gradient / Height', rotate_enabled=False,
+            world_grid=True, x_unit='m', y_unit='m', independent_scale=True)
+        self.radius_canvas = canvasplot.PlotCanvas(
+            self.profile_pane, title='Curve Radius', rotate_enabled=False,
+            world_grid=True, x_unit='m', independent_scale=True)
+        self.profile_pane.add(self.profile_canvas, weight=1)
+        self.profile_pane.add(self.radius_canvas, weight=1)
+        self.plot_pane.add(self.plane_canvas, weight=3)
+        self.plot_pane.add(self.profile_pane, weight=2)
         
         self.canvas_frame.columnconfigure(0, weight=1)
-        self.canvas_frame.columnconfigure(1, weight=1)
         self.canvas_frame.rowconfigure(0, weight=1)
-        self.canvas_frame.rowconfigure(1, weight=1)
         
         # ウィンドウリサイズに対する設定
         self.columnconfigure(0, weight=1)
@@ -286,9 +206,6 @@ class mainwindow(ttk.Frame):
         self.bind_all("<Control-s>", self.save_plots)
         self.bind_all("<F5>", self.reload_map)
         self.bind_all("<Alt-F4>", self.ask_quit)
-        self.bind_all("<Return>", self.distset_entry)
-        self.bind_all("<Shift-Left>", self.press_arrowkey)
-        self.bind_all("<Shift-Right>", self.press_arrowkey)
     def open_mapfile(self, event=None,inputdir=None):
         inputdir = filedialog.askopenfilename() if inputdir is None else inputdir
         if inputdir != '':
@@ -303,15 +220,11 @@ class mainwindow(ttk.Frame):
                 self.dmax = round(max(self.result.station.position.keys()),-2) + 500
                 self.distrange_min = self.dmin
                 self.distrange_max = self.dmax
-                self.setdist_entry_val.set(self.dmin)
-                self.distance_scale.set(0)
             else:
                 self.dmin = round(min(self.result.controlpoints.list_cp),-2) - 500
                 self.dmax = round(max(self.result.controlpoints.list_cp),-2) + 500
                 self.distrange_min = self.dmin
                 self.distrange_max = self.dmax
-                self.setdist_entry_val.set(self.dmin)
-                self.distance_scale.set(0)
                 
             '''
             self.distrange_min/max: 対象のマップで表示可能な距離程の最大最小値を示す
@@ -397,43 +310,75 @@ class mainwindow(ttk.Frame):
                 #self.menu_station.add_command(label=stationkey+', '+self.result.station.stationkey[stationkey], command=lambda: print(stationkey))
             self.stationlist_cb['values'] = tuple(stnlist_tmp)
             
+            view_state = self.get_view_state()
             self.mplot = mapplot.Mapplot(self.result,cp_arbdistribution = tmp_cp_arbdistribution)
-            self.plot_all()
+            self.plot_all(keep_view=True)
+            self.set_view_state(view_state)
             
             self.print_debugdata()
     def draw_planerplot(self):
-        self.ax_plane.cla()
-        ydimlim = {'x0.5':0.5,'x1':1,'x2':2,'x4':4,'x8':8,'x16':16}
-        self.mplot.plane(self.ax_plane,\
-                         distmin=self.dmin,\
-                         distmax=self.dmax,\
-                         iswholemap = True if self.dist_range_sel.get()=='all' else False,\
-                         othertrack_list = self.subwindow.othertrack_tree.get_checked(),\
-                         ydim_expansion = ydimlim[self.ydim_cont_val.get()],\
-                         ydim_offset = self.ydim_offset_val.get())
-        if self.stationpos_val.get():
-            self.mplot.stationpoint_plane(self.ax_plane,labelplot=self.stationlabel_val.get())
-        
-        trans = Affine2D().rotate_deg(90) + self.ax_plane.transData
-        self.ax_plane.transData = trans
-        self.fig_canvas.draw()
+        data = self.mplot.plane_data(
+            distmin=self.dmin,
+            distmax=self.dmax,
+            othertrack_list=self.subwindow.othertrack_tree.get_checked())
+
+        def render(view):
+            if len(data['owntrack']) > 0:
+                view.line(data['owntrack'][:, 1:3], width=2)
+            for track in data['othertracks']:
+                if len(track['points']) > 0:
+                    view.line(track['points'][:, 1:3], fill=track['color'], width=1)
+            if self.stationpos_val.get():
+                for station in data['stations']:
+                    x = station['point'][1]
+                    y = station['point'][2]
+                    view.point(x, y, radius=4)
+                    if self.stationlabel_val.get():
+                        view.text(x, y, station['name'], offset=(8, -8), font_size=9)
+                    if self.stationmileage_val.get():
+                        view.text(x, y, self.format_mileage(station['mileage']), offset=(8, 8), font_size=8, fill='#ffd84d')
+
+        self.plane_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
     def draw_profileplot(self):
-        self.ax_profile_g.cla()
-        self.ax_profile_r.cla()
-        self.ax_profile_s.cla()
-        
-        self.mplot.vertical(self.ax_profile_g,\
-                            self.ax_profile_r,\
-                            distmin=self.dmin,\
-                            distmax=self.dmax,\
-                            othertrack_list = self.subwindow.othertrack_tree.get_checked() if self.prof_othert_val.get() else None,\
-                            ylim = self.profYlim)
-        self.mplot.stationpoint_height(self.ax_profile_g,self.ax_profile_s,labelplot=self.stationlabel_val.get())
-        if self.gradientpos_val.get():
-            self.mplot.gradient_value(self.ax_profile_g,labelplot=self.gradientval_val.get())
-        self.mplot.radius_value(self.ax_profile_r,labelplot=self.curveval_val.get())
-        
-        self.fig_canvas.draw()
+        data = self.mplot.profile_data(
+            distmin=self.dmin,
+            distmax=self.dmax,
+            othertrack_list=self.subwindow.othertrack_tree.get_checked() if self.prof_othert_val.get() else None,
+            ylim=self.profYlim)
+
+        def render(view):
+            if len(data['owntrack']) > 0:
+                view.line(data['owntrack'][:, [0, 3]], width=2)
+            for track in data['othertracks']:
+                if len(track['points']) > 0:
+                    view.line(track['points'][:, [0, 3]], fill=track['color'], width=1)
+            for station in data['stations']:
+                x = station['point'][0]
+                z = station['point'][3]
+                view.line([(x, z), (x, data['station_top'])], width=1)
+                view.point(x, z, radius=3)
+                if self.stationlabel_val.get():
+                    view.text(x, z, station['name'], offset=(8, -26), font_size=9)
+                if self.stationmileage_val.get():
+                    view.text(x, data['station_top'], self.format_mileage(station['mileage']), offset=(8, -12), font_size=8, fill='#ffd84d')
+            if self.gradientpos_val.get():
+                for point in data['gradient_points']:
+                    view.line([(point['x'], point['z']), (point['x'], point['target_y'])], width=1)
+                for label in data['gradient_labels']:
+                    view.point(label['x'], label['y'], radius=2)
+                    if self.gradientval_val.get():
+                        view.text(label['x'], label['y'], label['text'], offset=(6, -6), font_size=8)
+
+        self.profile_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
+
+        def render_radius(view):
+            if len(data['curve']) > 0:
+                view.line(data['curve'], width=2)
+            if self.curveval_val.get():
+                for label in data['radius_labels']:
+                    view.text(label['x'], label['y'], label['text'], angle=90, offset=(-6, 0), font_size=8)
+
+        self.radius_canvas.set_renderer(render_radius, bounds=data['radius_bounds'], keep_view=self.keep_view_on_next_draw)
     def print_debugdata(self):
         if not __debug__:
             print('own_track data')
@@ -460,82 +405,71 @@ class mainwindow(ttk.Frame):
                 print(i)
                 for j in self.result.othertrack_pos[i]:
                     print(j)
-    def setdist_scale(self, val):
-        '''距離程スライドバーの処理
-        '''
-        if self.result != None:
-            pos = float(self.distance_scale.get())
-            distmin = ((self.distrange_max-self.dist_range_arb_val.get()) - self.distrange_min)*pos/100 + self.distrange_min
-            self.setdist_entry_val.set(distmin)
-            if(self.dist_range_sel.get() == 'arb'):
-                self.dmin = distmin
-                self.dmax = distmin + self.dist_range_arb_val.get()
-                
-                self.plot_all()
     def setdist_all(self):
         if self.result != None:
+            self.dist_range_sel.set('all')
             self.dmin = self.distrange_min
             self.dmax = self.distrange_max
-            
-            for key in ['x0.5','x1','x2','x4', 'x8', 'x16']:
-                self.ydim_cont[key]['state']='disable'
-            self.ydim_offset_entry['state']='disable'
-            
             self.plot_all()
     def setdist_arbitrary(self):
         if self.result != None:
-            for key in ['x0.5','x1','x2','x4', 'x8', 'x16']:
-                self.ydim_cont[key]['state']='normal'
-            self.ydim_offset_entry['state']='normal'
-            self.setdist_scale(0)
-    def distset_entry(self, event=None):
-        if self.result != None:
-            self.distance_scale.set((self.setdist_entry_val.get()-self.distrange_min)/((self.distrange_max-self.dist_range_arb_val.get()) - self.distrange_min)*100)
-    def plot_all(self):
+            self.setdist_all()
+    def format_mileage(self, value):
+        return '{:.0f}m'.format(value)
+    def get_view_state(self):
+        return {
+            'plane': self.plane_canvas.get_view_state(),
+            'profile': self.profile_canvas.get_view_state(),
+            'radius': self.radius_canvas.get_view_state(),
+        }
+    def set_view_state(self, state):
+        self.plane_canvas.set_view_state(state['plane'])
+        self.profile_canvas.set_view_state(state['profile'])
+        self.radius_canvas.set_view_state(state['radius'])
+    def plot_all(self, keep_view=False):
         if(self.result != None):
-            rcParams['font.family'] = self.fontctrl.get_fontname()
+            self.keep_view_on_next_draw = keep_view
+            self.plane_canvas.set_font(self.fontctrl.get_fontname())
+            self.profile_canvas.set_font(self.fontctrl.get_fontname())
+            self.radius_canvas.set_font(self.fontctrl.get_fontname())
             self.draw_planerplot()
             self.draw_profileplot()
+            self.keep_view_on_next_draw = False
     def ask_quit(self, event=None, ask=True):
         if ask:
             if tk.messagebox.askyesno(message='Quit Kobushi Track Viewer?'):
                 self.quit()
         else:
             self.quit()
-    def press_arrowkey(self, event=None):
-        #print(event.keysym)
-        if(event.keysym == 'Left'):
-            value = (self.setdist_entry_val.get() -self.dist_range_arb_val.get()/5 -self.distrange_min)/((self.distrange_max-self.dist_range_arb_val.get()) - self.distrange_min)*100
-            value = 0 if value < 0 else value
-            self.distance_scale.set(value)
-        elif(event.keysym == 'Right'):
-            value = (self.setdist_entry_val.get() + self.dist_range_arb_val.get()/5 - self.distrange_min)/((self.distrange_max-self.dist_range_arb_val.get()) - self.distrange_min)*100
-            value = 100 if value > 100 else value
-            self.distance_scale.set(value)
     def jumptostation(self, event=None):
         value = self.stationlist_cb.get()
         key = value.split(',')[0]
         dist = [k for k, v in self.result.station.position.items() if v == key]
         if len(dist)>0:
-            #print(value, dist[0])
-            self.setdist_entry_val.set(dist[0]-self.dist_range_arb_val.get()/2)
-            self.distset_entry()
+            self.focus_station(dist[0])
         else:
             tk.messagebox.showinfo(message=value+' はこのmap上に見つかりませんでした')
+    def focus_station(self, distance):
+        plane_data = self.mplot.plane_data(
+            distmin=self.dmin,
+            distmax=self.dmax,
+            othertrack_list=self.subwindow.othertrack_tree.get_checked())
+        for station in plane_data['stations']:
+            if station['distance'] == distance:
+                self.plane_canvas.center = [station['point'][1], station['point'][2]]
+                self.plane_canvas.redraw()
+                break
+        self.profile_canvas.center[0] = distance
+        self.profile_canvas.redraw()
+        self.radius_canvas.center[0] = distance
+        self.radius_canvas.redraw()
     def save_plots(self, event=None):
-        filepath = filedialog.asksaveasfilename(filetypes=[('portable network graphics (png)','*.png'), ('scalable vector graphics (svg)','*.svg'), ('any format','*')], defaultextension='*.*')
+        filepath = filedialog.asksaveasfilename(filetypes=[('PostScript','*.ps'), ('any format','*')], defaultextension='.ps')
         if filepath != '':
             filepath = pathlib.Path(filepath)
-            original_size = self.fig_plane.get_size_inches()
-            original_dpi = self.fig_plane.get_dpi()
-            width_inch = 30000 / 500     # width(px)/dpi
-            height_inch = 40000 / 500    # height(px)/dpi
-            self.fig_plane.set_size_inches(width_inch, height_inch)
-            self.fig_plane.set_dpi(500)
-            self.fig_plane.savefig(filepath.parent.joinpath(str(filepath.stem) + '' + str(filepath.suffix)))
-            self.fig_plane.set_size_inches(*original_size)
-            self.fig_plane.set_dpi(original_dpi)
-            self.fig_canvas.draw()
+            self.plane_canvas.canvas.postscript(file=str(filepath.parent.joinpath(filepath.stem + '_plan.ps')), colormode='color')
+            self.profile_canvas.canvas.postscript(file=str(filepath.parent.joinpath(filepath.stem + '_profile.ps')), colormode='color')
+            self.radius_canvas.canvas.postscript(file=str(filepath.parent.joinpath(filepath.stem + '_radius.ps')), colormode='color')
     def save_trackdata(self, event=None):
         filepath = filedialog.askdirectory(initialdir='./')
         if filepath != '':
