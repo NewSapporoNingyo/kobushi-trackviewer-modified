@@ -29,7 +29,7 @@ _translations = {
         'lang.name': '日本語',
 
         # Window titles
-        'app.title': 'Kobushi trackviewer ver. {version}',
+        'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': '他軌道の設定',
         'window.font': 'フォント',
 
@@ -121,7 +121,7 @@ _translations = {
     _EN: {
         'lang.name': 'English',
 
-        'app.title': 'Kobushi trackviewer ver. {version}',
+        'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': 'Other Tracks',
         'window.font': 'Font',
 
@@ -203,7 +203,7 @@ _translations = {
     _ZH: {
         'lang.name': '简体中文',
 
-        'app.title': 'Kobushi trackviewer ver. {version}',
+        'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': '其他轨道设置',
         'window.font': '字体',
 
