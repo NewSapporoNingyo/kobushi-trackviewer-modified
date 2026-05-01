@@ -1,5 +1,5 @@
 # Kobushi Trackviewer 改造版
-
+更新日期：2026/5/1
 > **原作版本**: 1.2.2   
 > **作者**: 原作：Konawasabi  改造：さっぽろ人形   
 > **许可**: Apache License, Version 2.0
@@ -533,6 +533,6 @@ distance,x,y,z,interpolate_func,cant,center,gauge
 ---
 
 > **License**: Apache License, Version 2.0  
-> **Author**: Konawasabi  
-> **Contact**: webmaster@konawasabi.riceball.jp  
-> **Website**: https://konawasabi.riceball.jp
+> **Author**: Konawasabi  Sapporo_ningyo  
+> **Contact**: webmaster@konawasabi.riceball.jp   sapporoningyo@gmail.com   
+> **Website**: https://konawasabi.riceball.jp  
