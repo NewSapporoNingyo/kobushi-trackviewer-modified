@@ -677,7 +677,7 @@ class mainwindow(ttk.Frame):
                                         'Test Dialog')
         print('Done', dialog_obj.result, dialog_obj.variables['A'].get())
     def open_webdocument(self, event=None):
-        webbrowser.open('https://github.com/konawasabi/kobushi-trackviewer/blob/master/reference.md')
+        webbrowser.open('https://github.com/NewSapporoNingyo/kobushi-trackviewer-modified')
 #if __name__ == '__main__':
 def main():
     if not __debug__:
