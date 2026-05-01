@@ -16,6 +16,7 @@
 
 import tkinter as tk
 from tkinter import ttk
+from . import i18n
 
 class dialog_multifields(ttk.Frame):
     def __init__(self, mainwindow, variable, title=None, message=None):
@@ -66,11 +67,11 @@ class dialog_multifields(ttk.Frame):
         
         self.button_frame = ttk.Frame(self, padding='3 3 3 3')
         self.button_frame.grid(column=0, row=2, sticky=(tk.E,tk.W))
-        self.button_ok = ttk.Button(self.button_frame, text="OK", command=self.clickOk)
+        self.button_ok = ttk.Button(self.button_frame, text=i18n.get('button.ok'), command=self.clickOk)
         self.button_ok.grid(column=0, row=0, sticky=(tk.S))
-        self.button_reset = ttk.Button(self.button_frame, text="Reset", command=self.clickreset)
+        self.button_reset = ttk.Button(self.button_frame, text=i18n.get('button.reset'), command=self.clickreset)
         self.button_reset.grid(column=1, row=0, sticky=(tk.S))
-        self.button_cancel = ttk.Button(self.button_frame, text="Cancel", command=self.clickCancel)
+        self.button_cancel = ttk.Button(self.button_frame, text=i18n.get('button.cancel'), command=self.clickCancel)
         self.button_cancel.grid(column=2, row=0, sticky=(tk.S))
     def clickOk(self, event=None):
         self.result = 'OK'

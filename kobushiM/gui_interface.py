@@ -34,6 +34,7 @@ from . import canvasplot
 from . import dialog_multifields
 from . import othertrack_window
 from . import font_window
+from . import i18n
 
 # http://centerwave-callout.com/tkinter内で起きた例外をどうキャッチするか？/
 class Catcher: # tkinter内で起きた例外をキャッチする
@@ -81,8 +82,66 @@ class mainwindow(ttk.Frame):
         
         self.parser = parser
 
+        i18n.on_language_change(self.refresh_ui_text)
+        self.refresh_ui_text()
+
+    def refresh_ui_text(self):
+        self.master.title(i18n.get('app.title', version=__version__))
+        if hasattr(self, 'open_btn'):
+            self.open_btn.config(text=i18n.get('button.open'))
+        if hasattr(self, 'aux_val_label'):
+            self.aux_val_label.config(text=i18n.get('frame.aux_info'))
+        if hasattr(self, 'stationpos_chk'):
+            self.stationpos_chk.config(text=i18n.get('chk.station_pos'))
+        if hasattr(self, 'stationlabel_chk'):
+            self.stationlabel_chk.config(text=i18n.get('chk.station_name'))
+        if hasattr(self, 'stationmileage_chk'):
+            self.stationmileage_chk.config(text=i18n.get('chk.station_mileage'))
+        if hasattr(self, 'gradientpos_chk'):
+            self.gradientpos_chk.config(text=i18n.get('chk.gradient_pos'))
+        if hasattr(self, 'gradientval_chk'):
+            self.gradientval_chk.config(text=i18n.get('chk.gradient_val'))
+        if hasattr(self, 'curveval_chk'):
+            self.curveval_chk.config(text=i18n.get('chk.curve_val'))
+        if hasattr(self, 'prof_othert_chk'):
+            self.prof_othert_chk.config(text=i18n.get('chk.prof_othert'))
+        if hasattr(self, 'graph_control_label'):
+            self.graph_control_label.config(text=i18n.get('frame.chart_visibility'))
+        if hasattr(self, 'show_gradient_graph_chk'):
+            self.show_gradient_graph_chk.config(text=i18n.get('chk.gradient_graph'))
+        if hasattr(self, 'show_curve_graph_chk'):
+            self.show_curve_graph_chk.config(text=i18n.get('chk.curve_graph'))
+        if hasattr(self, 'stationlist_label'):
+            self.stationlist_label.config(text=i18n.get('label.station_jump'))
+        if hasattr(self, 'menubar'):
+            self.menubar.entryconfig(0, label=i18n.get('menu.file'))
+            self.menubar.entryconfig(1, label=i18n.get('menu.options'))
+            self.menubar.entryconfig(2, label=i18n.get('menu.lang'))
+            self.menubar.entryconfig(3, label=i18n.get('menu.help'))
+            self.menu_file.entryconfig(0, label=i18n.get('menu.open'))
+            self.menu_file.entryconfig(1, label=i18n.get('menu.reload'))
+            self.menu_file.entryconfig(3, label=i18n.get('menu.save_image'))
+            self.menu_file.entryconfig(4, label=i18n.get('menu.save_trackdata'))
+            self.menu_file.entryconfig(6, label=i18n.get('menu.exit'))
+            self.menu_option.entryconfig(0, label=i18n.get('menu.controlpoints'))
+            self.menu_option.entryconfig(1, label=i18n.get('menu.plotlimit'))
+            self.menu_option.entryconfig(2, label=i18n.get('menu.font'))
+            self.menu_help.entryconfig(0, label=i18n.get('menu.help_ref'))
+            self.menu_help.entryconfig(1, label=i18n.get('menu.about'))
+        if hasattr(self, 'profile_canvas'):
+            self.profile_canvas.title = i18n.get('canvas.profile')
+        if hasattr(self, 'radius_canvas'):
+            self.radius_canvas.title = i18n.get('canvas.radius')
+        if hasattr(self, 'plane_canvas'):
+            self.plane_canvas.title = i18n.get('canvas.plan')
+        if hasattr(self, 'subwindow'):
+            self.subwindow.refresh_ui_text()
+        if hasattr(self, 'fontctrl'):
+            self.fontctrl.refresh_ui_text()
+        if self.result is not None:
+            self.plot_all()
+
     def create_widgets(self):
-        # 補助情報フレーム
         self.control_frame = ttk.Frame(self, padding='3 3 3 3')
         self.control_frame.grid(column=1, row=1, sticky=(tk.S))
         
@@ -90,37 +149,51 @@ class mainwindow(ttk.Frame):
         
         self.aux_values_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
         self.aux_values_control.grid(column=0, row=0, sticky=(tk.S, tk.W, tk.E))
-        self.aux_val_label =  ttk.Label(self.aux_values_control, text='補助情報', font = font_title)
+        self.aux_val_label = ttk.Label(self.aux_values_control, text=i18n.get('frame.aux_info'), font = font_title)
         self.aux_val_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.stationpos_val = tk.BooleanVar(value=True)
-        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text='駅座標',onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.plot_all)
+        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_pos'),onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.plot_all)
         self.stationpos_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
         self.stationlabel_val = tk.BooleanVar(value=True)
-        self.stationlabel_chk = ttk.Checkbutton(self.aux_values_control, text='駅名',onvalue=True, offvalue=False, variable=self.stationlabel_val, command=self.plot_all)
+        self.stationlabel_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_name'),onvalue=True, offvalue=False, variable=self.stationlabel_val, command=self.plot_all)
         self.stationlabel_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
         self.stationmileage_val = tk.BooleanVar(value=True)
-        self.stationmileage_chk = ttk.Checkbutton(self.aux_values_control, text='Show station mileage',onvalue=True, offvalue=False, variable=self.stationmileage_val, command=self.plot_all)
+        self.stationmileage_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_mileage'),onvalue=True, offvalue=False, variable=self.stationmileage_val, command=self.plot_all)
         self.stationmileage_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         self.gradientpos_val = tk.BooleanVar(value=True)
-        self.gradientpos_chk = ttk.Checkbutton(self.aux_values_control, text='勾配変化点',onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
+        self.gradientpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.gradient_pos'),onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
         self.gradientpos_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.gradientval_val = tk.BooleanVar(value=True)
-        self.gradientval_chk = ttk.Checkbutton(self.aux_values_control, text='勾配値',onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
+        self.gradientval_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.gradient_val'),onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
         self.gradientval_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
         self.curveval_val = tk.BooleanVar(value=True)
-        self.curveval_chk = ttk.Checkbutton(self.aux_values_control, text='曲線半径',onvalue=True, offvalue=False, variable=self.curveval_val, command=self.plot_all)
+        self.curveval_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.curve_val'),onvalue=True, offvalue=False, variable=self.curveval_val, command=self.plot_all)
         self.curveval_chk.grid(column=0, row=6, sticky=(tk.N, tk.W, tk.E))
         self.prof_othert_val = tk.BooleanVar(value=False)
-        self.prof_othert_chk = ttk.Checkbutton(self.aux_values_control, text='縦断面図他軌道',onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
+        self.prof_othert_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.prof_othert'),onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
         self.prof_othert_chk.grid(column=0, row=7, sticky=(tk.N, tk.W, tk.E))
+
+        self.graph_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
+        self.graph_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.graph_control_label = ttk.Label(self.graph_control, text=i18n.get('frame.chart_visibility'), font=font_title)
+        self.graph_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
+        self.show_gradient_graph_val = tk.BooleanVar(value=True)
+        self.show_gradient_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_graph'),
+            onvalue=True, offvalue=False, variable=self.show_gradient_graph_val,
+            command=self.update_pane_layout)
+        self.show_gradient_graph_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.show_curve_graph_val = tk.BooleanVar(value=True)
+        self.show_curve_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.curve_graph'),
+            onvalue=True, offvalue=False, variable=self.show_curve_graph_val,
+            command=self.update_pane_layout)
+        self.show_curve_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
         
         self.dist_range_sel = tk.StringVar(value='all')
         self.dist_range_arb_val = tk.DoubleVar(value=500)
         
-        # ファイルパスフレーム
         self.file_frame = ttk.Frame(self, padding='3 3 3 3')
         self.file_frame.grid(column=0, row=0, sticky=(tk.N, tk.W))
-        self.open_btn = ttk.Button(self.file_frame, text="開く", command=self.open_mapfile)
+        self.open_btn = ttk.Button(self.file_frame, text=i18n.get('button.open'), command=self.open_mapfile)
         self.open_btn.grid(column=0, row=0, sticky=(tk.W))
         self.filedir_entry_val = tk.StringVar()
         self.filedir_entry = ttk.Entry(self.file_frame, width=75, textvariable=self.filedir_entry_val)
@@ -131,7 +204,7 @@ class mainwindow(ttk.Frame):
 
         self.stationlist_frame = ttk.Frame(self.setdist_frame, padding='0 0 0 0')
         self.stationlist_frame.grid(column=0, row=0, sticky=(tk.E))
-        self.stationlist_label = ttk.Label(self.stationlist_frame, text='駅移動', font = font_title)
+        self.stationlist_label = ttk.Label(self.stationlist_frame, text=i18n.get('label.station_jump'), font = font_title)
         self.stationlist_label.grid(column=0, row=0, sticky=(tk.W))
         self.stationlist_val = tk.StringVar()
         self.stationlist_cb = ttk.Combobox(self.stationlist_frame, textvariable=self.stationlist_val, width = 20, state='readonly')
@@ -141,34 +214,71 @@ class mainwindow(ttk.Frame):
         self.setdist_frame.columnconfigure(0, weight=1)
         self.setdist_frame.rowconfigure(0, weight=1)
         
-        # プロットフレーム
         self.canvas_frame = ttk.Frame(self, padding='3 3 3 3')
         self.canvas_frame.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E, tk.S))
         
         self.plot_pane = ttk.PanedWindow(self.canvas_frame, orient=tk.VERTICAL)
         self.plot_pane.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
-        self.plane_canvas = canvasplot.PlotCanvas(self.plot_pane, title='Plan', rotate_enabled=True, y_axis_down=True, scalebar=True)
+        self.plane_canvas = canvasplot.PlotCanvas(self.plot_pane, title=i18n.get('canvas.plan'), rotate_enabled=True, y_axis_down=True, scalebar=True)
         self.profile_pane = ttk.PanedWindow(self.plot_pane, orient=tk.HORIZONTAL)
         self.profile_canvas = canvasplot.PlotCanvas(
-            self.profile_pane, title='Gradient / Height', rotate_enabled=False,
-            world_grid=True, x_unit='m', y_unit='m', independent_scale=True)
+            self.profile_pane, title=i18n.get('canvas.profile'), rotate_enabled=False,
+            world_grid=True, x_unit=i18n.get('unit.m'), y_unit=i18n.get('unit.m'), independent_scale=True, zoom_x_by_default=True)
         self.radius_canvas = canvasplot.PlotCanvas(
-            self.profile_pane, title='Curve Radius', rotate_enabled=False,
-            world_grid=True, x_unit='m', independent_scale=True)
+            self.profile_pane, title=i18n.get('canvas.radius'), rotate_enabled=False,
+            world_grid=True, x_unit=i18n.get('unit.m'), independent_scale=True, lock_y_center=True, zoom_x_by_default=True)
         self.profile_pane.add(self.profile_canvas, weight=1)
         self.profile_pane.add(self.radius_canvas, weight=1)
-        self.plot_pane.add(self.plane_canvas, weight=3)
-        self.plot_pane.add(self.profile_pane, weight=2)
+        self.plot_pane.add(self.plane_canvas, weight=20)
+        self.plot_pane.add(self.profile_pane, weight=1)
         
         self.canvas_frame.columnconfigure(0, weight=1)
         self.canvas_frame.rowconfigure(0, weight=1)
         
-        # ウィンドウリサイズに対する設定
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=0)
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
+    def update_pane_layout(self):
+        show_gradient = self.show_gradient_graph_val.get()
+        show_curve = self.show_curve_graph_val.get()
+
+        if show_gradient:
+            try:
+                self.profile_pane.add(self.profile_canvas, weight=1)
+            except tk.TclError:
+                pass
+        else:
+            try:
+                self.profile_pane.forget(self.profile_canvas)
+            except tk.TclError:
+                pass
+
+        if show_curve:
+            try:
+                self.profile_pane.add(self.radius_canvas, weight=1)
+            except tk.TclError:
+                pass
+        else:
+            try:
+                self.profile_pane.forget(self.radius_canvas)
+            except tk.TclError:
+                pass
+
+        if show_gradient or show_curve:
+            try:
+                self.plot_pane.add(self.profile_pane, weight=3)
+            except tk.TclError:
+                pass
+        else:
+            try:
+                self.plot_pane.forget(self.profile_pane)
+            except tk.TclError:
+                pass
+
+        self.master.update_idletasks()
+        self.plot_all()
     def create_menubar(self):
         self.master.option_add('*tearOff', False)
         
@@ -176,29 +286,31 @@ class mainwindow(ttk.Frame):
         
         self.menu_file = tk.Menu(self.menubar)
         self.menu_option = tk.Menu(self.menubar)
+        self.menu_lang = tk.Menu(self.menubar)
         self.menu_help = tk.Menu(self.menubar)
         
-        self.menubar.add_cascade(menu=self.menu_file, label='File')
-        self.menubar.add_cascade(menu=self.menu_option, label='Options')
-        self.menubar.add_cascade(menu=self.menu_help, label='Help')
+        self.menubar.add_cascade(menu=self.menu_file, label=i18n.get('menu.file'))
+        self.menubar.add_cascade(menu=self.menu_option, label=i18n.get('menu.options'))
+        self.menubar.add_cascade(menu=self.menu_lang, label=i18n.get('menu.lang'))
+        self.menubar.add_cascade(menu=self.menu_help, label=i18n.get('menu.help'))
         
-        self.menu_file.add_command(label='Open...', command=self.open_mapfile, accelerator='Control+O')
-        self.menu_file.add_command(label='Reload', command=self.reload_map, accelerator='F5')
+        self.menu_file.add_command(label=i18n.get('menu.open'), command=self.open_mapfile, accelerator='Control+O')
+        self.menu_file.add_command(label=i18n.get('menu.reload'), command=self.reload_map, accelerator='F5')
         self.menu_file.add_separator()
-        self.menu_file.add_command(label='Save Image...', command=self.save_plots, accelerator='Control+S')
-        self.menu_file.add_command(label='Save Trackdata...', command=self.save_trackdata)
+        self.menu_file.add_command(label=i18n.get('menu.save_image'), command=self.save_plots, accelerator='Control+S')
+        self.menu_file.add_command(label=i18n.get('menu.save_trackdata'), command=self.save_trackdata)
         self.menu_file.add_separator()
-        self.menu_file.add_command(label='Exit', command=self.ask_quit, accelerator='Alt+F4')
+        self.menu_file.add_command(label=i18n.get('menu.exit'), command=self.ask_quit, accelerator='Alt+F4')
         
-        self.menu_option.add_command(label='座標制御点...', command=self.set_arbcpdist)
-        self.menu_option.add_command(label='描画可能区間...', command=self.set_plotlimit)
-        self.menu_option.add_command(label='断面図y軸範囲...', command=self.set_profYlimit)
-        self.menu_option.add_command(label='Font...', command=self.fontctrl.create_window)
+        self.menu_option.add_command(label=i18n.get('menu.controlpoints'), command=self.set_arbcpdist)
+        self.menu_option.add_command(label=i18n.get('menu.plotlimit'), command=self.set_plotlimit)
+        self.menu_option.add_command(label=i18n.get('menu.font'), command=self.fontctrl.create_window)
         
-        #self.menu_option.add_command(label='customdialog...', command=self.customdialog_test)
+        for lang_code, lang_name in i18n.SUPPORTED_LANGUAGES.items():
+            self.menu_lang.add_command(label=lang_name, command=lambda c=lang_code: i18n.set_language(c))
         
-        self.menu_help.add_command(label='Help...', command=self.open_webdocument)
-        self.menu_help.add_command(label='About Kobushi...', command=self.aboutwindow)
+        self.menu_help.add_command(label=i18n.get('menu.help_ref'), command=self.open_webdocument)
+        self.menu_help.add_command(label=i18n.get('menu.about'), command=self.aboutwindow)
         
         self.master['menu'] = self.menubar
     def bind_keyevent(self):
@@ -352,24 +464,36 @@ class mainwindow(ttk.Frame):
             for track in data['othertracks']:
                 if len(track['points']) > 0:
                     view.line(track['points'][:, [0, 3]], fill=track['color'], width=1)
+
+            canvas = view.canvas
+            height = max(1, canvas.winfo_height())
+
             for station in data['stations']:
                 x = station['point'][0]
                 z = station['point'][3]
-                view.line([(x, z), (x, data['station_top'])], width=1)
+                screen_x, screen_z = view.world_to_screen(x, z)
+                canvas.create_line(screen_x, screen_z, screen_x, 0, fill='#ffffff', width=1)
                 view.point(x, z, radius=3)
                 if self.stationlabel_val.get():
                     view.text(x, z, station['name'], offset=(8, -26), font_size=9)
                 if self.stationmileage_val.get():
-                    view.text(x, data['station_top'], self.format_mileage(station['mileage']), offset=(8, -12), font_size=8, fill='#ffd84d')
+                    screen_x, _ = view.world_to_screen(x, 0)
+                    canvas.create_text(screen_x + 8, 8, anchor='nw',
+                        text=self.format_mileage(station['mileage']),
+                        fill='#ffd84d', font=(view.font_family, 8))
             if self.gradientpos_val.get():
                 for point in data['gradient_points']:
-                    view.line([(point['x'], point['z']), (point['x'], point['target_y'])], width=1)
+                    screen_x, screen_z = view.world_to_screen(point['x'], point['z'])
+                    canvas.create_line(screen_x, screen_z, screen_x, height, fill='#ffffff', width=1)
                 for label in data['gradient_labels']:
-                    view.point(label['x'], label['y'], radius=2)
                     if self.gradientval_val.get():
-                        view.text(label['x'], label['y'], label['text'], offset=(6, -6), font_size=8)
+                        screen_x, _ = view.world_to_screen(label['x'], 0)
+                        canvas.create_text(screen_x + 6, height - 6, anchor='se',
+                            text=label['text'], fill='#ffffff',
+                            font=(view.font_family, 8))
 
-        self.profile_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
+        if self.show_gradient_graph_val.get():
+            self.profile_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
 
         def render_radius(view):
             if len(data['curve']) > 0:
@@ -378,7 +502,26 @@ class mainwindow(ttk.Frame):
                 for label in data['radius_labels']:
                     view.text(label['x'], label['y'], label['text'], angle=90, offset=(-6, 0), font_size=8)
 
-        self.radius_canvas.set_renderer(render_radius, bounds=data['radius_bounds'], keep_view=self.keep_view_on_next_draw)
+            if self.stationpos_val.get():
+                canvas = view.canvas
+                width = max(1, canvas.winfo_width())
+                height = max(1, canvas.winfo_height())
+                for station in data['stations']:
+                    screen_x, _ = view.world_to_screen(station['distance'], 0)
+                    if screen_x < 0 or screen_x > width:
+                        continue
+                    canvas.create_line(screen_x, 0, screen_x, height, fill='#ffffff', width=1)
+                    if self.stationlabel_val.get():
+                        canvas.create_text(screen_x + 8, 8, anchor='nw',
+                            text=station['name'], fill='#ffffff',
+                            font=(view.font_family, 9))
+                    if self.stationmileage_val.get():
+                        canvas.create_text(screen_x + 8, height - 8, anchor='sw',
+                            text=self.format_mileage(station['mileage']),
+                            fill='#ffd84d', font=(view.font_family, 8))
+
+        if self.show_curve_graph_val.get():
+            self.radius_canvas.set_renderer(render_radius, bounds=data['radius_bounds'], keep_view=self.keep_view_on_next_draw)
     def print_debugdata(self):
         if not __debug__:
             print('own_track data')
@@ -415,7 +558,7 @@ class mainwindow(ttk.Frame):
         if self.result != None:
             self.setdist_all()
     def format_mileage(self, value):
-        return '{:.0f}m'.format(value)
+        return i18n.get('mileage.format').format(value)
     def get_view_state(self):
         return {
             'plane': self.plane_canvas.get_view_state(),
@@ -430,14 +573,15 @@ class mainwindow(ttk.Frame):
         if(self.result != None):
             self.keep_view_on_next_draw = keep_view
             self.plane_canvas.set_font(self.fontctrl.get_fontname())
-            self.profile_canvas.set_font(self.fontctrl.get_fontname())
-            self.radius_canvas.set_font(self.fontctrl.get_fontname())
+            if self.show_gradient_graph_val.get() or self.show_curve_graph_val.get():
+                self.profile_canvas.set_font(self.fontctrl.get_fontname())
+                self.radius_canvas.set_font(self.fontctrl.get_fontname())
             self.draw_planerplot()
             self.draw_profileplot()
             self.keep_view_on_next_draw = False
     def ask_quit(self, event=None, ask=True):
         if ask:
-            if tk.messagebox.askyesno(message='Quit Kobushi Track Viewer?'):
+            if tk.messagebox.askyesno(message=i18n.get('dialog.quit')):
                 self.quit()
         else:
             self.quit()
@@ -448,7 +592,7 @@ class mainwindow(ttk.Frame):
         if len(dist)>0:
             self.focus_station(dist[0])
         else:
-            tk.messagebox.showinfo(message=value+' はこのmap上に見つかりませんでした')
+            tk.messagebox.showinfo(message=i18n.get('dialog.station_not_found', value=value))
     def focus_station(self, distance):
         plane_data = self.mplot.plane_data(
             distmin=self.dmin,
@@ -464,7 +608,7 @@ class mainwindow(ttk.Frame):
         self.radius_canvas.center[0] = distance
         self.radius_canvas.redraw()
     def save_plots(self, event=None):
-        filepath = filedialog.asksaveasfilename(filetypes=[('PostScript','*.ps'), ('any format','*')], defaultextension='.ps')
+        filepath = filedialog.asksaveasfilename(filetypes=[(i18n.get('filetype.ps'),'*.ps'), (i18n.get('filetype.any'),'*')], defaultextension='.ps')
         if filepath != '':
             filepath = pathlib.Path(filepath)
             self.plane_canvas.canvas.postscript(file=str(filepath.parent.joinpath(filepath.stem + '_plan.ps')), colormode='color')
@@ -489,9 +633,9 @@ class mainwindow(ttk.Frame):
     def set_plotlimit(self, event=None):
         if self.result != None:
             dialog = dialog_multifields.dialog_multifields(self,\
-                                            [{'name':'min', 'type':'Double', 'label':'min (default:'+str(self.result.cp_defaultrange[0])+')', 'default':self.distrange_min},\
-                                            {'name':'max', 'type':'Double', 'label':'max (default:'+str(self.result.cp_defaultrange[1])+')', 'default':self.distrange_max}],
-                                            message ='Set plotlimit\n'+'map range:'+str(min(self.result.controlpoints.list_cp))+','+str(max(self.result.controlpoints.list_cp)))
+                                            [{'name':'min', 'type':'Double', 'label':i18n.get('dialog.plotlimit_min', value=str(self.result.cp_defaultrange[0])), 'default':self.distrange_min},\
+                                            {'name':'max', 'type':'Double', 'label':i18n.get('dialog.plotlimit_max', value=str(self.result.cp_defaultrange[1])), 'default':self.distrange_max}],
+                                            message =i18n.get('dialog.set_plotlimit', min=str(min(self.result.controlpoints.list_cp)), max=str(max(self.result.controlpoints.list_cp))))
             if dialog.result == 'OK':
                 self.distrange_min = float(dialog.variables['min'].get())
                 self.distrange_max = float(dialog.variables['max'].get())
@@ -507,13 +651,13 @@ class mainwindow(ttk.Frame):
             list_cp = self.result.controlpoints.list_cp
             boundary_margin = 500
             equaldist_unit = 25
-            cp_arbcp_default = [round(min(list_cp),-2) - boundary_margin,round(max(list_cp),-2) + boundary_margin,equaldist_unit]
+            cp_arbcp_default = [max(0, round(min(list_cp),-2) - boundary_margin),round(max(list_cp),-2) + boundary_margin,equaldist_unit]
             
             dialog = dialog_multifields.dialog_multifields(self,\
-                                            [{'name':'min', 'type':'Double', 'label':'min (default: '+str(cp_arb_default[0])+')', 'default':cp_arbdistribution[0]},\
-                                            {'name':'max', 'type':'Double', 'label':'max (default: '+str(cp_arb_default[1])+')', 'default':cp_arbdistribution[1]},\
-                                            {'name':'interval', 'type':'Double', 'label':'interval (default: '+str(cp_arb_default[2])+')', 'default':cp_arbdistribution[2]}],
-                                            message ='Set additional controlpoint')
+                                            [{'name':'min', 'type':'Double', 'label':i18n.get('dialog.cp_min', value=str(cp_arbcp_default[0])), 'default':cp_arbdistribution[0]},\
+                                            {'name':'max', 'type':'Double', 'label':i18n.get('dialog.cp_max', value=str(cp_arbcp_default[1])), 'default':cp_arbdistribution[1]},\
+                                            {'name':'interval', 'type':'Double', 'label':i18n.get('dialog.cp_interval', value=str(cp_arbcp_default[2])), 'default':cp_arbdistribution[2]}],
+                                            message =i18n.get('dialog.set_controlpoint'))
             if dialog.result == 'OK':
                 inputval = [dialog.variables['min'].get(),dialog.variables['max'].get(),dialog.variables['interval'].get()]
                 for ix in [0,1,2]:
@@ -523,27 +667,8 @@ class mainwindow(ttk.Frame):
                 for ix in [0,1,2]:
                     self.mplot.environment.cp_arbdistribution = None
                 self.reload_map()
-    def set_profYlimit(self, event=None):
-        if self.result != None:
-            dialog = dialog_multifields.dialog_multifields(self,\
-                                            [{'name':'min', 'type':'str', 'label':'min (default:auto)', 'default':'auto' if self.profYlim == None else str(self.profYlim[0])},\
-                                            {'name':'max', 'type':'str', 'label':'max (default:auto)', 'default':'auto' if self.profYlim == None else str(self.profYlim[1])}],
-                                            message ='Set profile Y limit')
-            if dialog.result == 'reset':
-                self.profYlim = None
-                self.plot_all()
-            elif dialog.result == 'OK':
-                if dialog.variables['min'].get() != 'auto' and dialog.variables['max'].get() != 'auto':
-                    self.profYlim = [float(dialog.variables['min'].get()),float(dialog.variables['max'].get())]
-                else:
-                    self.profYlim = None
-                self.plot_all()
     def aboutwindow(self, event=None):
-        msg  = 'Kobushi trackviewer\n'
-        msg += 'Version '+__version__+'\n\n'
-        msg += 'Copyright © 2021-2024 konawasabi\n'
-        msg += 'Released under the Apache License, Version 2.0 .\n'
-        msg += 'https://www.apache.org/licenses/LICENSE-2.0'
+        msg = i18n.get('about.text', version=__version__)
         tk.messagebox.showinfo(message=msg)
     def customdialog_test(self, event=None):
         dialog_obj = dialog_multifields.dialog_multifields(self,\

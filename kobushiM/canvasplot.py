@@ -20,7 +20,7 @@ from tkinter import ttk
 
 
 class PlotCanvas(ttk.Frame):
-    def __init__(self, master, title='', rotate_enabled=True, y_axis_down=False, world_grid=False, x_unit='', y_unit='', independent_scale=False, scalebar=False):
+    def __init__(self, master, title='', rotate_enabled=True, y_axis_down=False, world_grid=False, x_unit='', y_unit='', independent_scale=False, scalebar=False, lock_y_center=False, zoom_x_by_default=False):
         super().__init__(master, padding=0)
         self.title = title
         self.rotate_enabled = rotate_enabled
@@ -30,6 +30,8 @@ class PlotCanvas(ttk.Frame):
         self.y_unit = y_unit
         self.independent_scale = independent_scale
         self.scalebar = scalebar
+        self.lock_y_center = lock_y_center
+        self.zoom_x_by_default = zoom_x_by_default
         self.background = '#000000'
         self.grid_color = '#333333'
         self.line_color = '#ffffff'
@@ -107,6 +109,8 @@ class PlotCanvas(ttk.Frame):
         self.scale_x = state['scale_x']
         self.scale_y = state['scale_y']
         self.rotation = state['rotation']
+        if self.lock_y_center:
+            self.center[1] = 0
         self.redraw()
 
     def redraw(self):
@@ -311,7 +315,7 @@ class PlotCanvas(ttk.Frame):
 
     def _on_mousewheel(self, event):
         factor = 1.15 if event.delta > 0 else 1 / 1.15
-        self._zoom(factor, axis='both')
+        self._zoom(factor, axis='x' if self.zoom_x_by_default else 'both')
         self.redraw()
 
     def _on_shift_mousewheel(self, event):
@@ -327,7 +331,7 @@ class PlotCanvas(ttk.Frame):
     def _on_control_mousewheel(self, event):
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
-            self._zoom(factor, axis='x')
+            self._zoom(factor, axis='both' if self.zoom_x_by_default else 'x')
             self.redraw()
 
     def _zoom(self, factor, axis='both'):
@@ -349,7 +353,8 @@ class PlotCanvas(ttk.Frame):
         dy = event.y - self._last_drag[1]
         wx, wy = self.screen_to_world_delta(dx, dy)
         self.center[0] += wx
-        self.center[1] += wy
+        if not self.lock_y_center:
+            self.center[1] += wy
         self._last_drag = (event.x, event.y)
         self.redraw()
 

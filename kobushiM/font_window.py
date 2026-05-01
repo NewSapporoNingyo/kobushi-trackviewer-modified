@@ -17,6 +17,7 @@
 import tkinter as tk
 from tkinter import ttk
 import tkinter.font as tkfont
+from . import i18n
 
 class FontControl():
     def __init__(self, master, mainwindow):
@@ -32,7 +33,7 @@ class FontControl():
     def create_window(self,event=None):
         if self.master is None:
             self.master = tk.Toplevel(self.mainwindow)
-            self.master.title('Font')
+            self.master.title(i18n.get('window.font'))
             self.master.protocol('WM_DELETE_WINDOW', self.closewindow)
             self.master.focus_set()
         
@@ -47,10 +48,16 @@ class FontControl():
 
             self.subframe = ttk.Frame(self.frame, padding=5)
             self.subframe.grid(column=0,row=1,sticky=(tk.N, tk.W, tk.E, tk.S))
-            self.ok_button = ttk.Button(self.subframe, text='OK', command=self.ok_close)
+            self.ok_button = ttk.Button(self.subframe, text=i18n.get('button.ok'), command=self.ok_close)
             self.ok_button.grid(column=0,row=0)
-            self.cancel_button = ttk.Button(self.subframe, text='Cancel', command=self.closewindow)
+            self.cancel_button = ttk.Button(self.subframe, text=i18n.get('button.cancel'), command=self.closewindow)
             self.cancel_button.grid(column=1,row=0)
+
+    def refresh_ui_text(self):
+        if self.master is not None:
+            self.master.title(i18n.get('window.font'))
+            self.ok_button.config(text=i18n.get('button.ok'))
+            self.cancel_button.config(text=i18n.get('button.cancel'))
     def closewindow(self):
         self.master.withdraw()
         self.master = None

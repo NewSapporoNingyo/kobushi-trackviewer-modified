@@ -16,6 +16,7 @@
 
 import numpy as np
 from . import trackgenerator as tgen
+from . import i18n
 
 
 class Mapplot():
@@ -223,7 +224,7 @@ class Mapplot():
                 value = pointer.data[valuecontain]['value'] if valuecontain is not None else 0
             mid = (pos_start + pos_end) / 2
             if self.distrange['vertical'][0] < mid < self.distrange['vertical'][1]:
-                labels.append({'x': mid, 'y': ypos, 'text': str(np.fabs(value)) if value != 0 else 'Lv.'})
+                labels.append({'x': mid, 'y': ypos, 'text': str(np.fabs(value)) if value != 0 else i18n.get('label.lv')})
 
         while pointer.pointer['next'] is not None:
             if pointer.data[pointer.pointer['next']]['distance'] < self.distrange['vertical'][0]:

@@ -35,18 +35,18 @@ class TrackGenerator():
         boundary_margin = 500
         if self.env.cp_arbdistribution != None: # 距離程等間隔配置区間が指定されている場合
             if(len(self.env.station.position) > 0):
-                self.env.cp_arbdistribution_default = [round(min(self.env.station.position.keys()),-2) - boundary_margin,\
+                self.env.cp_arbdistribution_default = [max(0, round(min(self.env.station.position.keys()),-2) - boundary_margin),\
                                                         round(max(self.env.station.position.keys()),-2) + boundary_margin,\
                                                         equaldist_unit]
             else:
-                self.env.cp_arbdistribution_default = [round(self.cp_min,-2) - boundary_margin,\
+                self.env.cp_arbdistribution_default = [max(0, round(self.cp_min,-2) - boundary_margin),\
                                                         round(self.cp_max,-2) + boundary_margin,\
                                                         equaldist_unit]
             cp_equaldist = np.arange(self.env.cp_arbdistribution[0],self.env.cp_arbdistribution[1],self.env.cp_arbdistribution[2])
             self.list_cp.extend(cp_equaldist)
             self.list_cp = sorted(list(set(self.list_cp)))
         elif(len(self.env.station.position) > 0): # 駅が設定されている区間or距離程が存在する区間の前後boundary_margin mに追加
-            self.stationdist_min = round(min(self.env.station.position.keys()),-2) - boundary_margin
+            self.stationdist_min = max(0, round(min(self.env.station.position.keys()),-2) - boundary_margin)
             self.stationdist_max = round(max(self.env.station.position.keys()),-2) + boundary_margin
             cp_equaldist = np.arange(self.stationdist_min,self.stationdist_max,equaldist_unit)
             self.list_cp.extend(cp_equaldist)
@@ -56,11 +56,12 @@ class TrackGenerator():
             self.env.cp_arbdistribution_default = self.env.cp_arbdistribution
             self.env.cp_defaultrange = [self.stationdist_min,self.stationdist_max]
         else:
-            cp_equaldist = np.arange(round(self.cp_min,-2) - boundary_margin,round(self.cp_max,-2) + boundary_margin,equaldist_unit)
+            cp_equaldist_min = max(0, round(self.cp_min,-2) - boundary_margin)
+            cp_equaldist = np.arange(cp_equaldist_min,round(self.cp_max,-2) + boundary_margin,equaldist_unit)
             self.list_cp.extend(cp_equaldist)
             self.list_cp = sorted(list(set(self.list_cp)))
             
-            self.env.cp_arbdistribution = [round(self.cp_min,-2) - boundary_margin,round(self.cp_max,-2) + boundary_margin,equaldist_unit]
+            self.env.cp_arbdistribution = [cp_equaldist_min,round(self.cp_max,-2) + boundary_margin,equaldist_unit]
             self.env.cp_arbdistribution_default = self.env.cp_arbdistribution
             self.env.cp_defaultrange = [self.env.cp_arbdistribution[0],self.env.cp_arbdistribution[1]]
         
