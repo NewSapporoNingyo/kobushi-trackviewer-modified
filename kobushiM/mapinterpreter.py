@@ -128,6 +128,9 @@ class ParseMap(Transformer):
                             break
                         temp = getattr(temp, elem.children[0].lower()) # 対応するオブジェクトを取得
                     getattr(temp, argument[-1].children[0].lower())(*temp_argv) 
+            elif(first_obj in ['speedlimit']):
+                temp = getattr(self.environment, 'speedlimit')
+                getattr(temp, argument[-1].children[0].lower())(*argument[-1].children[1:])
     def include_file(self, path): #外部ファイルインクルード
         input = loadheader.joinpath(self.environment.rootpath, path)
         interpreter = ParseMap(self.environment,self.parser)
@@ -191,6 +194,7 @@ class ParseMap(Transformer):
             self.environment.controlpoints.relocate()
             self.environment.own_track.relocate()
             self.environment.othertrack.relocate()
+            self.environment.speedlimit.relocate()
         
         print(str(f_path.name)+' loaded.')
         return self.environment

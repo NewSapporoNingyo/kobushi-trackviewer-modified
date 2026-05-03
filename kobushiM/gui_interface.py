@@ -105,6 +105,8 @@ class mainwindow(ttk.Frame):
             self.curveval_chk.config(text=i18n.get('chk.curve_val'))
         if hasattr(self, 'prof_othert_chk'):
             self.prof_othert_chk.config(text=i18n.get('chk.prof_othert'))
+        if hasattr(self, 'speedlimit_chk'):
+            self.speedlimit_chk.config(text=i18n.get('chk.speedlimit'))
         if hasattr(self, 'graph_control_label'):
             self.graph_control_label.config(text=i18n.get('frame.chart_visibility'))
         if hasattr(self, 'show_gradient_graph_chk'):
@@ -180,6 +182,9 @@ class mainwindow(ttk.Frame):
         self.prof_othert_val = tk.BooleanVar(value=False)
         self.prof_othert_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.prof_othert'),onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
         self.prof_othert_chk.grid(column=0, row=7, sticky=(tk.N, tk.W, tk.E))
+        self.speedlimit_val = tk.BooleanVar(value=True)
+        self.speedlimit_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.speedlimit'),onvalue=True, offvalue=False, variable=self.speedlimit_val, command=self.plot_all)
+        self.speedlimit_chk.grid(column=0, row=8, sticky=(tk.N, tk.W, tk.E))
 
         self.graph_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
         self.graph_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
@@ -474,6 +479,24 @@ class mainwindow(ttk.Frame):
                         view.text(x, y, station['name'], offset=(8, -8), font_size=9)
                     if self.stationmileage_val.get():
                         view.text(x, y, self.format_mileage(station['mileage']), offset=(8, 8), font_size=8, fill='#ffd84d')
+
+            if self.speedlimit_val.get():
+                import math as _math
+                for sp in data['speedlimits']:
+                    t = sp['theta']
+                    half_len = 5.0
+                    dx = half_len * _math.sin(t)
+                    dy = half_len * _math.cos(t)
+                    view.line([(sp['x'] - dx, sp['y'] + dy),
+                               (sp['x'] + dx, sp['y'] - dy)],
+                              fill='#88ccff', width=1)
+                    if sp['speed'] is not None:
+                        view.text(sp['x'], sp['y'],
+                                  str(int(sp['speed'])),
+                                  offset=(10, -4), font_size=8, fill='#88ccff')
+                    else:
+                        view.text(sp['x'], sp['y'], 'x',
+                                  offset=(10, -4), font_size=8, fill='#88ccff')
 
         self.plane_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
     def draw_profileplot(self):

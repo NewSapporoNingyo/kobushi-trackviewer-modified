@@ -71,7 +71,7 @@ class Mapplot():
             self.distrange['plane'][0],
             self.distrange['plane'][1])
         if len(owntrack) == 0:
-            return {'owntrack': np.array([]), 'othertracks': [], 'stations': [], 'bounds': (-1, -1, 1, 1)}
+            return {'owntrack': np.array([]), 'othertracks': [], 'stations': [], 'speedlimits': [], 'bounds': (-1, -1, 1, 1)}
 
         self.origin_angle = owntrack[0][4]
         owntrack = self.rotate_track(owntrack, -self.origin_angle)
@@ -97,10 +97,12 @@ class Mapplot():
             stations = self.rotate_track(stations, -self.origin_angle)
 
         bounds = self._bounds([owntrack] + [track['points'] for track in othertracks])
+        speedlimits = self._speedlimit_plane_data(owntrack)
         return {
             'owntrack': owntrack,
             'othertracks': othertracks,
             'stations': self._station_labels(stations),
+            'speedlimits': speedlimits,
             'bounds': bounds
         }
 
@@ -305,6 +307,27 @@ class Mapplot():
                 'point': row
             })
         return labels
+
+    def _speedlimit_plane_data(self, owntrack):
+        result = []
+        if len(self.environment.speedlimit.data) == 0 or len(owntrack) == 0:
+            return result
+        for entry in self.environment.speedlimit.data:
+            d = entry['distance']
+            if d < self.distrange['plane'][0] or d > self.distrange['plane'][1]:
+                continue
+            idx = np.searchsorted(owntrack[:, 0], d)
+            if idx >= len(owntrack):
+                idx = len(owntrack) - 1
+            pos = owntrack[idx]
+            result.append({
+                'distance': d,
+                'x': pos[1],
+                'y': pos[2],
+                'theta': pos[4] - self.origin_angle,
+                'speed': entry['speed'],
+            })
+        return result
 
     def _distance_filter(self, data, distmin, distmax):
         data = data[data[:, 0] >= distmin]

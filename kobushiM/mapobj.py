@@ -32,6 +32,7 @@ class Environment():
         self.station = Station(self)
         self.controlpoints = ControlPoints(self)
         self.othertrack = Othertrack(self)
+        self.speedlimit = SpeedLimit(self)
 class Owntrack():
     '''自軌道データクラス
     (1)パーサが読み取った自軌道マップ要素を変換するサブクラス
@@ -277,3 +278,14 @@ class Othertrack():
         for trackkey in self.data.keys():
             self.data[trackkey]     = sorted(self.data[trackkey], key=lambda x: x['distance'])
             self.cp_range[trackkey] = {'min':min(self.data[trackkey], key=lambda x: x['distance'])['distance'],'max':max(self.data[trackkey], key=lambda x: x['distance'])['distance']}
+
+class SpeedLimit():
+    def __init__(self, parent):
+        self.data = []
+        self.environment = parent
+    def begin(self, *a):
+        self.data.append({'distance': self.environment.predef_vars['distance'], 'speed': a[0] if len(a) > 0 else 0})
+    def end(self, *a):
+        self.data.append({'distance': self.environment.predef_vars['distance'], 'speed': None})
+    def relocate(self):
+        self.data = sorted(self.data, key=lambda x: x['distance'])

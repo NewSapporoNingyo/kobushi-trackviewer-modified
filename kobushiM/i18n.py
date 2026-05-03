@@ -71,6 +71,8 @@ _translations = {
         'chk.gradient_val': '勾配値',
         'chk.curve_val': '曲線半径',
         'chk.prof_othert': '縦断面図他軌道',
+        'chk.speedlimit': '速度制限',
+
         'chk.gradient_graph': 'Gradient Graph',
         'chk.curve_graph': 'Curve Graph',
 
@@ -165,6 +167,8 @@ _translations = {
         'chk.gradient_val': 'Gradient Value',
         'chk.curve_val': 'Curve Radius',
         'chk.prof_othert': 'Other Tracks (Profile)',
+        'chk.speedlimit': 'Speed Limit',
+
         'chk.gradient_graph': 'Gradient Graph',
         'chk.curve_graph': 'Curve Graph',
 
@@ -252,6 +256,8 @@ _translations = {
         'chk.gradient_val': '坡度数值',
         'chk.curve_val': '曲线半径',
         'chk.prof_othert': '纵断面其他轨道',
+        'chk.speedlimit': '限速',
+
         'chk.gradient_graph': '坡度图',
         'chk.curve_graph': '曲线半径图',
 
