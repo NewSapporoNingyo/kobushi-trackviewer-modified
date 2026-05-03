@@ -239,22 +239,12 @@ class PlotCanvas(ttk.Frame):
             p1 = self.world_to_screen(x, ymin)
             p2 = self.world_to_screen(x, ymax)
             self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            if p1[0] >= -60 and p1[0] <= width + 60:
-                self.canvas.create_text(
-                    p1[0] + 3, height - 16, anchor='sw',
-                    text=self._format_grid_label(x, self.x_unit),
-                    fill='#888888', font=(self.font_family, 8))
             x += step
         y = y0
         while y <= ymax + step:
             p1 = self.world_to_screen(xmin, y)
             p2 = self.world_to_screen(xmax, y)
             self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            if p1[1] >= -20 and p1[1] <= height + 20:
-                self.canvas.create_text(
-                    6, p1[1] - 2, anchor='sw',
-                    text=self._format_grid_label(y, self.y_unit),
-                    fill='#888888', font=(self.font_family, 8))
             y += step
 
     def _draw_world_grid(self):
