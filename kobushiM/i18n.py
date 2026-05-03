@@ -61,7 +61,7 @@ _translations = {
 
         # Control panel
         'frame.aux_info': '補助情報',
-        'frame.chart_visibility': 'Chart Visibility',
+        'frame.chart_visibility': 'チャート表示',
 
         # Checkboxes
         'chk.station_pos': '駅座標',

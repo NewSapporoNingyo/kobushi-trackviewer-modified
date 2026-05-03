@@ -171,20 +171,14 @@ class mainwindow(ttk.Frame):
         self.stationmileage_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_mileage'),onvalue=True, offvalue=False, variable=self.stationmileage_val, command=self.plot_all)
         self.stationmileage_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         self.gradientpos_val = tk.BooleanVar(value=True)
-        self.gradientpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.gradient_pos'),onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
-        self.gradientpos_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.gradientval_val = tk.BooleanVar(value=True)
-        self.gradientval_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.gradient_val'),onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
-        self.gradientval_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
         self.curveval_val = tk.BooleanVar(value=True)
         self.curveval_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.curve_val'),onvalue=True, offvalue=False, variable=self.curveval_val, command=self.plot_all)
-        self.curveval_chk.grid(column=0, row=6, sticky=(tk.N, tk.W, tk.E))
+        self.curveval_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.prof_othert_val = tk.BooleanVar(value=False)
-        self.prof_othert_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.prof_othert'),onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
-        self.prof_othert_chk.grid(column=0, row=7, sticky=(tk.N, tk.W, tk.E))
         self.speedlimit_val = tk.BooleanVar(value=True)
         self.speedlimit_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.speedlimit'),onvalue=True, offvalue=False, variable=self.speedlimit_val, command=self.plot_all)
-        self.speedlimit_chk.grid(column=0, row=8, sticky=(tk.N, tk.W, tk.E))
+        self.speedlimit_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
 
         self.graph_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
         self.graph_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
@@ -195,11 +189,20 @@ class mainwindow(ttk.Frame):
             onvalue=True, offvalue=False, variable=self.show_gradient_graph_val,
             command=self.update_pane_layout)
         self.show_gradient_graph_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.gradientpos_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_pos'),
+            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
+        self.gradientpos_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.gradientval_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_val'),
+            onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
+        self.gradientval_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
+        self.prof_othert_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.prof_othert'),
+            onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
+        self.prof_othert_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.show_curve_graph_val = tk.BooleanVar(value=True)
         self.show_curve_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.curve_graph'),
             onvalue=True, offvalue=False, variable=self.show_curve_graph_val,
             command=self.update_pane_layout)
-        self.show_curve_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.show_curve_graph_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
 
         self.grid_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
         self.grid_control.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
