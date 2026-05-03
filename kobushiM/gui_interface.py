@@ -470,11 +470,15 @@ class mainwindow(ttk.Frame):
 
         def render(view):
             if len(data['owntrack']) > 0:
-                if self.curveval_val.get() and len(data['curve_sections']) > 0:
+                if self.curveval_val.get():
                     for sec in data['curve_sections']:
                         mask = (data['owntrack'][:, 0] >= sec['start']) & (data['owntrack'][:, 0] <= sec['end'])
                         if mask.sum() >= 2:
-                            view.line(data['owntrack'][mask][:, 1:3], fill='#777777', width=8)
+                            view.line(data['owntrack'][mask][:, 1:3], fill='#888888', width=10)
+                    for sec in data['transition_sections']:
+                        mask = (data['owntrack'][:, 0] >= sec['start']) & (data['owntrack'][:, 0] <= sec['end'])
+                        if mask.sum() >= 2:
+                            view.line(data['owntrack'][mask][:, 1:3], fill='#555555', width=8)
                 view.line(data['owntrack'][:, 1:3], width=2)
             other_track_tasks = [(t, t['points'][:, 1:3]) for t in data['othertracks'] if len(t['points']) > 0]
             if other_track_tasks:
@@ -500,14 +504,21 @@ class mainwindow(ttk.Frame):
 
             if self.speedlimit_val.get():
                 import math as _math
+                canvas = view.canvas
                 for sp in data['speedlimits']:
+                    sx, sy = view.world_to_screen(sp['x'], sp['y'])
                     t = sp['theta']
-                    half_len = 5.0
-                    dx = half_len * _math.sin(t)
-                    dy = half_len * _math.cos(t)
-                    view.line([(sp['x'] - dx, sp['y'] + dy),
-                               (sp['x'] + dx, sp['y'] - dy)],
-                              fill='#88ccff', width=1)
+                    wx_perp = sp['x'] - _math.sin(t)
+                    wy_perp = sp['y'] + _math.cos(t)
+                    sx_perp, sy_perp = view.world_to_screen(wx_perp, wy_perp)
+                    sdx = sx_perp - sx
+                    sdy = sy_perp - sy
+                    screen_len = _math.sqrt(sdx * sdx + sdy * sdy)
+                    if screen_len > 0:
+                        sdx = sdx / screen_len * 8
+                        sdy = sdy / screen_len * 8
+                    canvas.create_line(sx - sdx, sy - sdy, sx + sdx, sy + sdy,
+                                       fill='#88ccff', width=1)
                     if sp['speed'] is not None:
                         view.text(sp['x'], sp['y'],
                                   str(int(sp['speed'])),

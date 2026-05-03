@@ -71,7 +71,7 @@ class Mapplot():
             self.distrange['plane'][0],
             self.distrange['plane'][1])
         if len(owntrack) == 0:
-            return {'owntrack': np.array([]), 'othertracks': [], 'stations': [], 'speedlimits': [], 'curve_sections': [], 'bounds': (-1, -1, 1, 1)}
+            return {'owntrack': np.array([]), 'othertracks': [], 'stations': [], 'speedlimits': [], 'curve_sections': [], 'transition_sections': [], 'bounds': (-1, -1, 1, 1)}
 
         self.origin_angle = owntrack[0][4]
         owntrack = self.rotate_track(owntrack, -self.origin_angle)
@@ -99,12 +99,14 @@ class Mapplot():
         bounds = self._bounds([owntrack] + [track['points'] for track in othertracks])
         speedlimits = self._speedlimit_plane_data(owntrack)
         curve_sections = self._curve_sections_plane_data(owntrack)
+        transition_sections = self._transition_sections_plane_data(owntrack)
         return {
             'owntrack': owntrack,
             'othertracks': othertracks,
             'stations': self._station_labels(stations),
             'speedlimits': speedlimits,
             'curve_sections': curve_sections,
+            'transition_sections': transition_sections,
             'bounds': bounds
         }
 
@@ -360,6 +362,38 @@ class Mapplot():
                         'start': start_d,
                         'end': end_d,
                         'radius': radius_val,
+                    })
+            else:
+                i += 1
+        return sections
+
+    def _transition_sections_plane_data(self, owntrack):
+        sections = []
+        if len(self.environment.own_track.data) == 0:
+            return sections
+        radius_entries = [e for e in self.environment.own_track.data if e['key'] == 'radius']
+        i = 0
+        while i < len(radius_entries):
+            entry = radius_entries[i]
+            if entry['flag'] == 'bt':
+                start_d = entry['distance']
+                i += 1
+                while i < len(radius_entries):
+                    next_entry = radius_entries[i]
+                    if next_entry['flag'] == '':
+                        end_d = next_entry['distance']
+                        break
+                    i += 1
+                else:
+                    end_d = max(self.environment.owntrack_pos[:, 0])
+                if start_d >= self.distrange['plane'][1] or end_d <= self.distrange['plane'][0]:
+                    continue
+                start_d = max(start_d, self.distrange['plane'][0])
+                end_d = min(end_d, self.distrange['plane'][1])
+                if end_d > start_d:
+                    sections.append({
+                        'start': start_d,
+                        'end': end_d,
                     })
             else:
                 i += 1
