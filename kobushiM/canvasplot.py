@@ -242,28 +242,54 @@ class PlotCanvas(ttk.Frame):
         pts = np.asarray(points)
         if pts.size == 0 or len(pts) < 2:
             return
+            
+        # 1. 获取屏幕视窗的世界坐标边界
         xmin, ymin, xmax, ymax = self._get_visible_world_bounds()
+        
+        # 2. 找出当前视口范围内的点的掩码与索引
         mask = (pts[:, 0] >= xmin) & (pts[:, 0] <= xmax) & \
                (pts[:, 1] >= ymin) & (pts[:, 1] <= ymax)
         visible_idx = np.where(mask)[0]
-        if len(visible_idx) < 2:
+        
+        # 注意：这里将原先的 < 2 改为了 == 0
+        # 因为如果屏幕内仅有1个点，加上向外扩展的2个点，共有3个点，也足以构成穿越角落的线段
+        if len(visible_idx) == 0:
             return
-        extended_mask = np.zeros(len(pts), dtype=bool)
-        extended_mask[visible_idx] = True
-        if visible_idx[0] > 0:
-            extended_mask[visible_idx[0] - 1] = True
-        if visible_idx[-1] < len(pts) - 1:
-            extended_mask[visible_idx[-1] + 1] = True
-        visible = pts[extended_mask]
+            
+        # === 核心修复区 ===
+        # 3. 寻找不连续的区段（即跳跃的索引）。差值大于1代表线路曾经离开过屏幕
+        breaks = np.where(np.diff(visible_idx) > 1)[0] + 1
+        segments = np.split(visible_idx, breaks)
+        
         stride = self._get_lod_stride()
-        if stride > 1:
-            visible = visible[::stride]
-        coords = self._world_to_screen_batch(visible)
-        if len(coords) >= 4:
-            self.canvas.create_line(
-                *coords, fill=fill or self.line_color, width=width,
-                capstyle=tk.ROUND, joinstyle=tk.ROUND)
-
+        
+        # 4. 分段渲染线段，避免将两个不相连的屏幕内线段跨屏直连
+        for seg in segments:
+            if len(seg) == 0:
+                continue
+                
+            # 向前后各扩展1个点的索引，防止线段在屏幕边缘断开（等同于原版的 extended_mask 逻辑）
+            start_idx = max(0, seg[0] - 1)
+            end_idx = min(len(pts) - 1, seg[-1] + 1)
+            
+            # 使用切片获取当前连续线段的数据点（切片右侧为开区间所以要 +1）
+            segment_pts = pts[start_idx : end_idx + 1]
+            
+            # 应用 Level of Detail (LOD) 降低远视角的渲染开销
+            if stride > 1:
+                segment_pts = segment_pts[::stride]
+                
+            # 提取的线段点数需满足绘制要求
+            if len(segment_pts) < 2:
+                continue
+                
+            # 转换为屏幕坐标并批量渲染
+            coords = self._world_to_screen_batch(segment_pts)
+            if len(coords) >= 4:
+                self.canvas.create_line(
+                    *coords, fill=fill or self.line_color, width=width,
+                    capstyle=tk.ROUND, joinstyle=tk.ROUND)
+                    
     def line_screen(self, coords, fill=None, width=1):
         if len(coords) >= 4:
             self.canvas.create_line(
