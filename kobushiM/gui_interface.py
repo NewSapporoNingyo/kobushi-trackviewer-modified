@@ -380,8 +380,8 @@ class mainwindow(ttk.Frame):
         sx, sy = self.plane_canvas.world_to_screen(track_x, track_y)
         c = self.plane_canvas.canvas
         ids = []
-        ids.append(c.create_line(sx - 6, sy - 6, sx + 6, sy + 6, fill='#ff3333', width=1))
-        ids.append(c.create_line(sx - 6, sy + 6, sx + 6, sy - 6, fill='#ff3333', width=1))
+        ids.append(c.create_line(sx - 12, sy - 12, sx + 12, sy + 12, fill='#ff3333', width=2))
+        ids.append(c.create_line(sx - 12, sy + 12, sx + 12, sy - 12, fill='#ff3333', width=2))
         self._measure_marker_ids[c] = ids
         for cv in [self.profile_canvas, self.radius_canvas]:
             sx_v, _ = cv.world_to_screen(distance, 0)

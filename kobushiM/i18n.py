@@ -73,8 +73,8 @@ _translations = {
         'chk.prof_othert': '縦断面図他軌道',
         'chk.speedlimit': '速度制限',
 
-        'chk.gradient_graph': 'Gradient Graph',
-        'chk.curve_graph': 'Curve Graph',
+        'chk.gradient_graph': '勾配図',
+        'chk.curve_graph': '曲線半径図',
 
         # Grid control
         'frame.grid': 'グリッド線',
