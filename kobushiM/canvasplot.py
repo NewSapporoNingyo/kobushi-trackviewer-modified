@@ -15,12 +15,13 @@
 '''
 
 import math
+import numpy as np
 import tkinter as tk
 from tkinter import ttk
 
 
 class PlotCanvas(ttk.Frame):
-    def __init__(self, master, title='', rotate_enabled=True, y_axis_down=False, world_grid=False, x_unit='', y_unit='', independent_scale=False, scalebar=False, lock_y_center=False, zoom_x_by_default=False):
+    def __init__(self, master, title='', rotate_enabled=True, y_axis_down=False, world_grid=False, x_unit='', y_unit='', independent_scale=False, scalebar=False, lock_y_center=False, zoom_x_by_default=False, enable_lod=True):
         super().__init__(master, padding=0)
         self.title = title
         self.rotate_enabled = rotate_enabled
@@ -32,6 +33,7 @@ class PlotCanvas(ttk.Frame):
         self.scalebar = scalebar
         self.lock_y_center = lock_y_center
         self.zoom_x_by_default = zoom_x_by_default
+        self.enable_lod = enable_lod
         self.grid_mode = 'fixed'
         self.interactive = True
         self._view_fitted = False
@@ -49,6 +51,8 @@ class PlotCanvas(ttk.Frame):
         self.renderer = None
         self._last_drag = None
         self._last_rotate = None
+        self._zoom_debounce_id = None
+        self._pan_deferred = False
 
         self.canvas = tk.Canvas(self, bg=self.background, highlightthickness=0)
         self.canvas.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
@@ -61,6 +65,7 @@ class PlotCanvas(ttk.Frame):
         self.canvas.bind('<Control-MouseWheel>', self._on_control_mousewheel)
         self.canvas.bind('<ButtonPress-1>', self._start_pan)
         self.canvas.bind('<B1-Motion>', self._pan)
+        self.canvas.bind('<ButtonRelease-1>', self._stop_pan)
         self.canvas.bind('<ButtonPress-3>', self._start_rotate)
         self.canvas.bind('<B3-Motion>', self._rotate_drag)
         self.canvas.bind('<Double-Button-1>', self.fit)
@@ -125,12 +130,17 @@ class PlotCanvas(ttk.Frame):
         self.redraw()
 
     def redraw(self):
+        if self._zoom_debounce_id is not None:
+            self.after_cancel(self._zoom_debounce_id)
+        self._zoom_debounce_id = None
+        self._pan_deferred = False
         self.canvas.delete('all')
         self._draw_grid()
         if self.title:
             self.canvas.create_text(
                 8, 8, anchor='nw', text=self.title,
-                fill=self.text_color, font=(self.font_family, 9, 'bold'))
+                fill=self.text_color, font=(self.font_family, 9, 'bold'),
+                tags=('fixed',))
         if self.renderer is not None:
             self.renderer(self)
         if self.scalebar:
@@ -176,11 +186,79 @@ class PlotCanvas(ttk.Frame):
             return self.scale_x, self.scale_y
         return self.scale, self.scale
 
+    def _world_to_screen_batch(self, points_np):
+        if points_np.size == 0:
+            return []
+        cx, cy = self.center
+        c = math.cos(self.rotation)
+        s = math.sin(self.rotation)
+        width = max(1, self.canvas.winfo_width())
+        height = max(1, self.canvas.winfo_height())
+        screen_y_sign = 1 if self.y_axis_down else -1
+        sx_scale, sy_scale = self._scales()
+        dx = points_np[:, 0] - cx
+        dy = points_np[:, 1] - cy
+        rx = c * dx - s * dy
+        ry = s * dx + c * dy
+        sx = width / 2 + rx * sx_scale
+        sy = height / 2 + screen_y_sign * ry * sy_scale
+        coords = np.empty(sx.size + sy.size, dtype=np.float64)
+        coords[0::2] = sx
+        coords[1::2] = sy
+        return coords.tolist()
+
+    def _get_visible_world_bounds(self, margin=0.35):
+        width = max(1, self.canvas.winfo_width())
+        height = max(1, self.canvas.winfo_height())
+        corners = [
+            self.screen_to_world(0, 0),
+            self.screen_to_world(width, 0),
+            self.screen_to_world(0, height),
+            self.screen_to_world(width, height),
+        ]
+        xmin = min(p[0] for p in corners)
+        xmax = max(p[0] for p in corners)
+        ymin = min(p[1] for p in corners)
+        ymax = max(p[1] for p in corners)
+        pad_x = max(xmax - xmin, 1e-6) * margin
+        pad_y = max(ymax - ymin, 1e-6) * margin
+        return xmin - pad_x, ymin - pad_y, xmax + pad_x, ymax + pad_y
+
+    def _get_lod_stride(self):
+        if not self.enable_lod:
+            return 1
+        sx_scale, sy_scale = self._scales()
+        effective_scale = min(sx_scale, sy_scale)
+        if effective_scale >= 0.5:
+            return 1
+        elif effective_scale >= 0.1:
+            return 2
+        elif effective_scale >= 0.01:
+            return 5
+        else:
+            return 10
+
     def line(self, points, fill=None, width=1):
-        coords = []
-        for x, y in points:
-            sx, sy = self.world_to_screen(x, y)
-            coords.extend([sx, sy])
+        pts = np.asarray(points)
+        if pts.size == 0 or len(pts) < 2:
+            return
+        xmin, ymin, xmax, ymax = self._get_visible_world_bounds()
+        mask = (pts[:, 0] >= xmin) & (pts[:, 0] <= xmax) & \
+               (pts[:, 1] >= ymin) & (pts[:, 1] <= ymax)
+        visible_idx = np.where(mask)[0]
+        if len(visible_idx) < 2:
+            return
+        extended_mask = np.zeros(len(pts), dtype=bool)
+        extended_mask[visible_idx] = True
+        if visible_idx[0] > 0:
+            extended_mask[visible_idx[0] - 1] = True
+        if visible_idx[-1] < len(pts) - 1:
+            extended_mask[visible_idx[-1] + 1] = True
+        visible = pts[extended_mask]
+        stride = self._get_lod_stride()
+        if stride > 1:
+            visible = visible[::stride]
+        coords = self._world_to_screen_batch(visible)
         if len(coords) >= 4:
             self.canvas.create_line(
                 *coords, fill=fill or self.line_color, width=width,
@@ -206,6 +284,9 @@ class PlotCanvas(ttk.Frame):
 
     @staticmethod
     def _world_to_screen_static(points, vp):
+        pts = np.asarray(points)
+        if pts.size == 0 or len(pts) < 2:
+            return []
         width = vp['width']
         height = vp['height']
         cx = vp['center'][0]
@@ -215,16 +296,16 @@ class PlotCanvas(ttk.Frame):
         screen_y_sign = 1 if vp['y_axis_down'] else -1
         sx_scale = vp['sx_scale']
         sy_scale = vp['sy_scale']
-        coords = []
-        for x, y in points:
-            dx = x - cx
-            dy = y - cy
-            rx = c * dx - s * dy
-            ry = s * dx + c * dy
-            sx = width / 2 + rx * sx_scale
-            sy = height / 2 + screen_y_sign * ry * sy_scale
-            coords.extend([sx, sy])
-        return coords
+        dx = pts[:, 0] - cx
+        dy = pts[:, 1] - cy
+        rx = c * dx - s * dy
+        ry = s * dx + c * dy
+        sx = width / 2 + rx * sx_scale
+        sy = height / 2 + screen_y_sign * ry * sy_scale
+        coords = np.empty(sx.size + sy.size, dtype=np.float64)
+        coords[0::2] = sx
+        coords[1::2] = sy
+        return coords.tolist()
 
     def point(self, x, y, radius=3, outline=None, fill=None):
         sx, sy = self.world_to_screen(x, y)
@@ -260,9 +341,9 @@ class PlotCanvas(ttk.Frame):
         height = max(1, self.canvas.winfo_height())
         spacing = 80
         for x in range(0, width + spacing, spacing):
-            self.canvas.create_line(x, 0, x, height, fill=self.grid_color)
+            self.canvas.create_line(x, 0, x, height, fill=self.grid_color, tags=('fixed',))
         for y in range(0, height + spacing, spacing):
-            self.canvas.create_line(0, y, width, y, fill=self.grid_color)
+            self.canvas.create_line(0, y, width, y, fill=self.grid_color, tags=('fixed',))
 
     def _draw_world_grid_square(self):
         width = max(1, self.canvas.winfo_width())
@@ -306,6 +387,12 @@ class PlotCanvas(ttk.Frame):
         xmax = max(point[0] for point in corners)
         ymin = min(point[1] for point in corners)
         ymax = max(point[1] for point in corners)
+        xspan = max(xmax - xmin, 1e-6)
+        yspan = max(ymax - ymin, 1e-6)
+        xmin -= xspan * 0.35
+        xmax += xspan * 0.35
+        ymin -= yspan * 0.35
+        ymax += yspan * 0.35
         xstep = self._grid_step(xmax - xmin)
         ystep = self._grid_step(ymax - ymin)
         x0 = math.floor(xmin / xstep) * xstep
@@ -319,7 +406,8 @@ class PlotCanvas(ttk.Frame):
                 self.canvas.create_text(
                     p1[0] + 3, height - 16, anchor='sw',
                     text=self._format_grid_label(x, self.x_unit),
-                    fill='#888888', font=(self.font_family, 8))
+                    fill='#888888', font=(self.font_family, 8),
+                    tags=('fixed_y',))
             x += xstep
         y = y0
         while y <= ymax + ystep:
@@ -330,7 +418,8 @@ class PlotCanvas(ttk.Frame):
                 self.canvas.create_text(
                     6, p1[1] - 2, anchor='sw',
                     text=self._format_grid_label(y, self.y_unit),
-                    fill='#888888', font=(self.font_family, 8))
+                    fill='#888888', font=(self.font_family, 8),
+                    tags=('fixed_x',))
             y += ystep
 
     def _grid_step(self, span):
@@ -366,12 +455,12 @@ class PlotCanvas(ttk.Frame):
         x1 = x2 - bar_px
         y = height - margin
         tick = 10
-        self.canvas.create_line(x1, y - tick, x1, y, x2, y, x2, y - tick, fill=self.text_color, width=2)
+        self.canvas.create_line(x1, y - tick, x1, y, x2, y, x2, y - tick, fill=self.text_color, width=2, tags=('fixed',))
         self.canvas.create_text(
             (x1 + x2) / 2, y - tick - 4,
             text=self._format_scalebar_label(length),
             fill=self.text_color, font=(self.font_family, 9),
-            anchor='s')
+            anchor='s', tags=('fixed',))
 
     def _friendly_scalebar_length(self, raw_length):
         if raw_length <= 0:
@@ -406,7 +495,7 @@ class PlotCanvas(ttk.Frame):
             return
         factor = 1.15 if event.delta > 0 else 1 / 1.15
         self._zoom(factor, axis='x' if self.zoom_x_by_default else 'both')
-        self.redraw()
+        self._schedule_redraw()
 
     def _on_shift_mousewheel(self, event):
         if not self.interactive:
@@ -414,11 +503,11 @@ class PlotCanvas(ttk.Frame):
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='y')
-            self.redraw()
+            self._schedule_redraw()
             return
         if self.rotate_enabled:
             self.rotation += math.radians(5 if event.delta > 0 else -5)
-            self.redraw()
+            self._schedule_redraw()
 
     def _on_control_mousewheel(self, event):
         if not self.interactive:
@@ -426,7 +515,7 @@ class PlotCanvas(ttk.Frame):
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='both' if self.zoom_x_by_default else 'x')
-            self.redraw()
+            self._schedule_redraw()
 
     def _zoom(self, factor, axis='both'):
         self._view_fitted = True
@@ -438,10 +527,20 @@ class PlotCanvas(ttk.Frame):
         else:
             self.scale = max(0.001, min(self.scale * factor, 10000))
 
+    def _schedule_redraw(self):
+        if self._zoom_debounce_id is not None:
+            self.after_cancel(self._zoom_debounce_id)
+        self._zoom_debounce_id = self.after(50, self._debounced_redraw)
+
+    def _debounced_redraw(self):
+        self._zoom_debounce_id = None
+        self.redraw()
+
     def _start_pan(self, event):
         if not self.interactive:
             return
         self._last_drag = (event.x, event.y)
+        self._pan_deferred = True
 
     def _pan(self, event):
         if not self.interactive:
@@ -450,12 +549,23 @@ class PlotCanvas(ttk.Frame):
             return
         dx = event.x - self._last_drag[0]
         dy = event.y - self._last_drag[1]
+        move_dy = 0 if self.lock_y_center else dy
+        self.canvas.move('all', dx, move_dy)
+        self.canvas.move('fixed', -dx, -move_dy)
+        if move_dy != 0:
+            self.canvas.move('fixed_y', 0, -move_dy)
+        if dx != 0:
+            self.canvas.move('fixed_x', -dx, 0)
         wx, wy = self.screen_to_world_delta(dx, dy)
         self.center[0] += wx
         if not self.lock_y_center:
             self.center[1] += wy
         self._last_drag = (event.x, event.y)
-        self.redraw()
+
+    def _stop_pan(self, event):
+        if self._pan_deferred:
+            self._pan_deferred = False
+            self.redraw()
 
     def _start_rotate(self, event):
         if not self.interactive:

@@ -282,7 +282,8 @@ class mainwindow(ttk.Frame):
             world_grid=True, x_unit=i18n.get('unit.m'), y_unit=i18n.get('unit.m'), independent_scale=True, zoom_x_by_default=True)
         self.radius_canvas = canvasplot.PlotCanvas(
             self.profile_pane, title=i18n.get('canvas.radius'), rotate_enabled=False,
-            world_grid=True, x_unit=i18n.get('unit.m'), independent_scale=True, lock_y_center=True, zoom_x_by_default=True)
+            world_grid=True, x_unit=i18n.get('unit.m'), independent_scale=True, lock_y_center=True, zoom_x_by_default=True,
+            enable_lod=False)
         self.profile_pane.add(self.profile_canvas, weight=1)
         self.profile_pane.add(self.radius_canvas, weight=1)
         self.plot_pane.add(self.plane_canvas, weight=20)
@@ -718,7 +719,7 @@ class mainwindow(ttk.Frame):
                 x = station['point'][0]
                 z = station['point'][3]
                 screen_x, screen_z = view.world_to_screen(x, z)
-                canvas.create_line(screen_x, screen_z, screen_x, 0, fill='#ffffff', width=1)
+                canvas.create_line(screen_x, screen_z, screen_x, -100, fill='#ffffff', width=1)
                 view.point(x, z, radius=3)
                 if self.stationlabel_val.get():
                     view.text(x, z, station['name'], offset=(8, -26), font_size=9)
@@ -726,17 +727,17 @@ class mainwindow(ttk.Frame):
                     screen_x, _ = view.world_to_screen(x, 0)
                     canvas.create_text(screen_x + 8, 8, anchor='nw',
                         text=self.format_mileage(station['mileage']),
-                        fill='#ffd84d', font=(view.font_family, 8))
+                        fill='#ffd84d', font=(view.font_family, 8), tags=('fixed_y',))
             if self.gradientpos_val.get():
                 for point in data['gradient_points']:
                     screen_x, screen_z = view.world_to_screen(point['x'], point['z'])
-                    canvas.create_line(screen_x, screen_z, screen_x, height, fill='#ffffff', width=1)
+                    canvas.create_line(screen_x, screen_z, screen_x, height + 100, fill='#ffffff', width=1)
                 for label in data['gradient_labels']:
                     if self.gradientval_val.get():
                         screen_x, _ = view.world_to_screen(label['x'], 0)
                         canvas.create_text(screen_x + 6, height - 6, anchor='se',
                             text=label['text'], fill='#ffffff',
-                            font=(view.font_family, 8))
+                            font=(view.font_family, 8), tags=('fixed_y',))
 
         if self.show_gradient_graph_val.get():
             self.profile_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
