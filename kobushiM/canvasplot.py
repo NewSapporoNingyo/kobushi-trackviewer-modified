@@ -180,6 +180,46 @@ class PlotCanvas(ttk.Frame):
                 *coords, fill=fill or self.line_color, width=width,
                 capstyle=tk.ROUND, joinstyle=tk.ROUND)
 
+    def line_screen(self, coords, fill=None, width=1):
+        if len(coords) >= 4:
+            self.canvas.create_line(
+                *coords, fill=fill or self.line_color, width=width,
+                capstyle=tk.ROUND, joinstyle=tk.ROUND)
+
+    def get_view_params(self):
+        sx_scale, sy_scale = self._scales()
+        return {
+            'width': max(1, self.canvas.winfo_width()),
+            'height': max(1, self.canvas.winfo_height()),
+            'center': self.center.copy(),
+            'rotation': self.rotation,
+            'sx_scale': sx_scale,
+            'sy_scale': sy_scale,
+            'y_axis_down': self.y_axis_down,
+        }
+
+    @staticmethod
+    def _world_to_screen_static(points, vp):
+        width = vp['width']
+        height = vp['height']
+        cx = vp['center'][0]
+        cy = vp['center'][1]
+        c = math.cos(vp['rotation'])
+        s = math.sin(vp['rotation'])
+        screen_y_sign = 1 if vp['y_axis_down'] else -1
+        sx_scale = vp['sx_scale']
+        sy_scale = vp['sy_scale']
+        coords = []
+        for x, y in points:
+            dx = x - cx
+            dy = y - cy
+            rx = c * dx - s * dy
+            ry = s * dx + c * dy
+            sx = width / 2 + rx * sx_scale
+            sy = height / 2 + screen_y_sign * ry * sy_scale
+            coords.extend([sx, sy])
+        return coords
+
     def point(self, x, y, radius=3, outline=None, fill=None):
         sx, sy = self.world_to_screen(x, y)
         self.canvas.create_oval(

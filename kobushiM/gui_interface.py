@@ -26,6 +26,7 @@ import tkinter.simpledialog as simpledialog
 import tkinter.font as font
 
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from ._version import __version__
 from . import mapinterpreter as interp
@@ -475,9 +476,18 @@ class mainwindow(ttk.Frame):
                         if mask.sum() >= 2:
                             view.line(data['owntrack'][mask][:, 1:3], fill='#777777', width=8)
                 view.line(data['owntrack'][:, 1:3], width=2)
-            for track in data['othertracks']:
-                if len(track['points']) > 0:
-                    view.line(track['points'][:, 1:3], fill=track['color'], width=1)
+            other_track_tasks = [(t, t['points'][:, 1:3]) for t in data['othertracks'] if len(t['points']) > 0]
+            if other_track_tasks:
+                vp = view.get_view_params()
+                tasks = []
+                with ThreadPoolExecutor(max_workers=min(len(other_track_tasks), 8)) as executor:
+                    for track, pts in other_track_tasks:
+                        tasks.append((track, executor.submit(
+                            canvasplot.PlotCanvas._world_to_screen_static, pts, vp)))
+                for track, future in tasks:
+                    coords = future.result()
+                    if coords:
+                        view.line_screen(coords, fill=track['color'], width=1)
             if self.stationpos_val.get():
                 for station in data['stations']:
                     x = station['point'][1]
@@ -528,9 +538,18 @@ class mainwindow(ttk.Frame):
         def render(view):
             if len(data['owntrack']) > 0:
                 view.line(data['owntrack'][:, [0, 3]], width=2)
-            for track in data['othertracks']:
-                if len(track['points']) > 0:
-                    view.line(track['points'][:, [0, 3]], fill=track['color'], width=1)
+            other_track_tasks = [(t, t['points'][:, [0, 3]]) for t in data['othertracks'] if len(t['points']) > 0]
+            if other_track_tasks:
+                vp = view.get_view_params()
+                tasks = []
+                with ThreadPoolExecutor(max_workers=min(len(other_track_tasks), 8)) as executor:
+                    for track, pts in other_track_tasks:
+                        tasks.append((track, executor.submit(
+                            canvasplot.PlotCanvas._world_to_screen_static, pts, vp)))
+                for track, future in tasks:
+                    coords = future.result()
+                    if coords:
+                        view.line_screen(coords, fill=track['color'], width=1)
 
             canvas = view.canvas
             height = max(1, canvas.winfo_height())
