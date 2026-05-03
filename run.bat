@@ -1,1 +1,1 @@
-python -m kobushiM
+python launcher.py
