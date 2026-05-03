@@ -466,6 +466,11 @@ class mainwindow(ttk.Frame):
 
         def render(view):
             if len(data['owntrack']) > 0:
+                if self.curveval_val.get() and len(data['curve_sections']) > 0:
+                    for sec in data['curve_sections']:
+                        mask = (data['owntrack'][:, 0] >= sec['start']) & (data['owntrack'][:, 0] <= sec['end'])
+                        if mask.sum() >= 2:
+                            view.line(data['owntrack'][mask][:, 1:3], fill='#777777', width=8)
                 view.line(data['owntrack'][:, 1:3], width=2)
             for track in data['othertracks']:
                 if len(track['points']) > 0:
@@ -493,10 +498,21 @@ class mainwindow(ttk.Frame):
                     if sp['speed'] is not None:
                         view.text(sp['x'], sp['y'],
                                   str(int(sp['speed'])),
-                                  offset=(10, -4), font_size=8, fill='#88ccff')
+                                  offset=(10, -15), font_size=9, fill='#88ccff')
                     else:
                         view.text(sp['x'], sp['y'], 'x',
-                                  offset=(10, -4), font_size=8, fill='#88ccff')
+                                  offset=(10, -15), font_size=9, fill='#88ccff')
+
+            if self.curveval_val.get() and len(data['curve_sections']) > 0:
+                for sec in data['curve_sections']:
+                    mid_d = (sec['start'] + sec['end']) / 2
+                    idx = np.searchsorted(data['owntrack'][:, 0], mid_d)
+                    if idx >= len(data['owntrack']):
+                        idx = len(data['owntrack']) - 1
+                    mx = data['owntrack'][idx][1]
+                    my = data['owntrack'][idx][2]
+                    view.text(mx, my, str(int(sec['radius'])),
+                              offset=(8, -16), font_size=8, fill='#88ff88')
 
         self.plane_canvas.set_renderer(render, bounds=data['bounds'], keep_view=self.keep_view_on_next_draw)
     def draw_profileplot(self):
@@ -546,9 +562,8 @@ class mainwindow(ttk.Frame):
         def render_radius(view):
             if len(data['curve']) > 0:
                 view.line(data['curve'], width=2)
-            if self.curveval_val.get():
-                for label in data['radius_labels']:
-                    view.text(label['x'], label['y'], label['text'], angle=90, offset=(-6, 0), font_size=8)
+            for label in data['radius_labels']:
+                view.text(label['x'], label['y'], label['text'], angle=90, offset=(-6, 0), font_size=8)
 
             if self.stationpos_val.get():
                 canvas = view.canvas
