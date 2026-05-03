@@ -82,6 +82,7 @@ class mainwindow(ttk.Frame):
         self.subwindow = othertrack_window.SubWindow(tk.Toplevel(master), self)
         
         self.parser = parser
+        self._measure_marker_ids = {}
 
         i18n.on_language_change(self.refresh_ui_text)
         self.refresh_ui_text()
@@ -122,6 +123,12 @@ class mainwindow(ttk.Frame):
             self.grid_movable_rb.config(text=i18n.get('grid.movable'))
         if hasattr(self, 'grid_none_rb'):
             self.grid_none_rb.config(text=i18n.get('grid.none'))
+        if hasattr(self, 'mode_control_label'):
+            self.mode_control_label.config(text=i18n.get('frame.mode'))
+        if hasattr(self, 'mode_pan_rb'):
+            self.mode_pan_rb.config(text=i18n.get('mode.pan'))
+        if hasattr(self, 'mode_measure_rb'):
+            self.mode_measure_rb.config(text=i18n.get('mode.measure'))
         if hasattr(self, 'stationlist_label'):
             self.stationlist_label.config(text=i18n.get('label.station_jump'))
         if hasattr(self, 'menubar'):
@@ -219,6 +226,20 @@ class mainwindow(ttk.Frame):
         self.grid_none_rb = ttk.Radiobutton(self.grid_control, text=i18n.get('grid.none'),
             variable=self.grid_mode_val, value='none', command=self.on_grid_mode_change)
         self.grid_none_rb.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
+
+        self.mode_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
+        self.mode_control.grid(column=0, row=3, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.mode_control_label = ttk.Label(self.mode_control, text=i18n.get('frame.mode'), font=font_title)
+        self.mode_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
+        self.mode_val = tk.StringVar(value='pan')
+        self.mode_pan_rb = ttk.Radiobutton(self.mode_control, text=i18n.get('mode.pan'),
+            variable=self.mode_val, value='pan', command=self.on_mode_change)
+        self.mode_pan_rb.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.mode_measure_rb = ttk.Radiobutton(self.mode_control, text=i18n.get('mode.measure'),
+            variable=self.mode_val, value='measure', command=self.on_mode_change)
+        self.mode_measure_rb.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+
+        self.measure_pos = None
         
         self.dist_range_sel = tk.StringVar(value='all')
         self.dist_range_arb_val = tk.DoubleVar(value=500)
@@ -242,6 +263,9 @@ class mainwindow(ttk.Frame):
         self.stationlist_cb = ttk.Combobox(self.stationlist_frame, textvariable=self.stationlist_val, width = 20, state='readonly')
         self.stationlist_cb.grid(column=1, row=0, sticky=(tk.W, tk.E))
         self.stationlist_cb.bind('<<ComboboxSelected>>', self.jumptostation)
+
+        self.measure_info_label = ttk.Label(self, text='', font=font_title)
+        self.measure_info_label.grid(column=0, row=3, sticky=(tk.W), padx=(6, 0), pady=(2, 6))
         
         self.setdist_frame.columnconfigure(0, weight=1)
         self.setdist_frame.rowconfigure(0, weight=1)
@@ -272,6 +296,7 @@ class mainwindow(ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
+        self.rowconfigure(3, weight=0)
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
         show_curve = self.show_curve_graph_val.get()
@@ -313,6 +338,130 @@ class mainwindow(ttk.Frame):
         self.plot_all()
     def on_grid_mode_change(self):
         self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
+    def on_mode_change(self):
+        measure_mode = self.mode_val.get() == 'measure'
+        for canvas in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+            canvas.interactive = not measure_mode
+        if measure_mode:
+            self._measure_marker_ids = {}
+            self.plane_canvas.canvas.bind('<Motion>', self.on_plan_motion)
+            self.profile_canvas.canvas.bind('<Motion>', self.on_profile_motion)
+            self.radius_canvas.canvas.bind('<Motion>', self.on_radius_motion)
+        else:
+            self.plane_canvas.canvas.unbind('<Motion>')
+            self.profile_canvas.canvas.unbind('<Motion>')
+            self.radius_canvas.canvas.unbind('<Motion>')
+            self.plane_canvas.set_cursor('')
+            self.profile_canvas.set_cursor('')
+            self.radius_canvas.set_cursor('')
+            self._clear_measure_marker()
+            self.measure_pos = None
+            self.measure_info_label.config(text='')
+            self.plot_all(keep_view=True)
+    def _clear_measure_marker(self):
+        for canvas, ids in list(self._measure_marker_ids.items()):
+            for item_id in ids:
+                try:
+                    canvas.delete(item_id)
+                except Exception:
+                    pass
+        self._measure_marker_ids = {}
+
+    def _sync_measure_markers(self, distance):
+        self._clear_measure_marker()
+        own = self.result.owntrack_pos
+        if len(own) == 0 or distance < own[0][0] or distance > own[-1][0]:
+            return
+        idx = np.searchsorted(own[:, 0], distance)
+        if idx >= len(own):
+            idx = len(own) - 1
+        track_x = own[idx][1]
+        track_y = own[idx][2]
+        sx, sy = self.plane_canvas.world_to_screen(track_x, track_y)
+        c = self.plane_canvas.canvas
+        ids = []
+        ids.append(c.create_line(sx - 6, sy - 6, sx + 6, sy + 6, fill='#ff3333', width=1))
+        ids.append(c.create_line(sx - 6, sy + 6, sx + 6, sy - 6, fill='#ff3333', width=1))
+        self._measure_marker_ids[c] = ids
+        for cv in [self.profile_canvas, self.radius_canvas]:
+            sx_v, _ = cv.world_to_screen(distance, 0)
+            c2 = cv.canvas
+            h = max(1, c2.winfo_height())
+            self._measure_marker_ids[c2] = [c2.create_line(sx_v, 0, sx_v, h, fill='#ff3333', width=1)]
+
+    def on_plan_motion(self, event):
+        if self.result is None:
+            return
+        v = self.plane_canvas
+        wx, wy = v.screen_to_world(event.x, event.y)
+        owntrack = self.result.owntrack_pos
+        if len(owntrack) == 0:
+            return
+        dists = np.sqrt((owntrack[:, 1] - wx) ** 2 + (owntrack[:, 2] - wy) ** 2)
+        min_idx = np.argmin(dists)
+        track_x = owntrack[min_idx][1]
+        track_y = owntrack[min_idx][2]
+        sx_p, sy_p = v.world_to_screen(track_x, track_y)
+        screen_dist = np.sqrt((sx_p - event.x) ** 2 + (sy_p - event.y) ** 2)
+        if screen_dist <= 30:
+            for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+                cv.set_cursor('crosshair')
+            distance = owntrack[min_idx][0]
+            self.measure_pos = {'distance': distance}
+            self._sync_measure_markers(distance)
+            self.update_measure_info()
+        else:
+            self.plane_canvas.set_cursor('')
+            self.profile_canvas.set_cursor('')
+            self.radius_canvas.set_cursor('')
+            if self.measure_pos is not None:
+                self.measure_pos = None
+                self._clear_measure_marker()
+                self.measure_info_label.config(text='')
+
+    def on_profile_motion(self, event):
+        if self.result is None:
+            return
+        v = self.profile_canvas
+        wx, _ = v.screen_to_world(event.x, event.y)
+        own = self.result.owntrack_pos
+        if len(own) == 0 or wx < own[0][0] or wx > own[-1][0]:
+            return
+        for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+            cv.set_cursor('crosshair')
+        self.measure_pos = {'distance': wx}
+        self._sync_measure_markers(wx)
+        self.update_measure_info()
+
+    def on_radius_motion(self, event):
+        if self.result is None:
+            return
+        v = self.radius_canvas
+        wx, _ = v.screen_to_world(event.x, event.y)
+        own = self.result.owntrack_pos
+        if len(own) == 0 or wx < own[0][0] or wx > own[-1][0]:
+            return
+        for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+            cv.set_cursor('crosshair')
+        self.measure_pos = {'distance': wx}
+        self._sync_measure_markers(wx)
+        self.update_measure_info()
+    def update_measure_info(self):
+        if self.measure_pos is None or self.mplot is None:
+            self.measure_info_label.config(text='')
+            return
+        info = self.mplot.get_track_info_at(self.measure_pos['distance'])
+        if info is None:
+            self.measure_info_label.config(text='')
+            return
+        speed_text = i18n.get('info.no_limit') if info['speed'] is None else '{:.0f} km/h'.format(info['speed'])
+        text = '{m}: {mileage:.0f}m | {e}: {elevation:.1f}m | {g}: {gradient:.1f}‰ | {r}: {radius:.0f}m | {s}: {speed}'.format(
+            m=i18n.get('info.mileage'), mileage=info['mileage'],
+            e=i18n.get('info.elevation'), elevation=info['elevation'],
+            g=i18n.get('info.gradient'), gradient=info['gradient'],
+            r=i18n.get('info.radius'), radius=info['radius'],
+            s=i18n.get('info.speedlimit'), speed=speed_text)
+        self.measure_info_label.config(text=text)
     def create_menubar(self):
         self.master.option_add('*tearOff', False)
         
@@ -667,6 +816,7 @@ class mainwindow(ttk.Frame):
         self.radius_canvas.set_view_state(state['radius'])
     def plot_all(self, keep_view=False):
         if(self.result != None):
+            self._clear_measure_marker()
             self.keep_view_on_next_draw = keep_view
             self.plane_canvas.set_font(self.fontctrl.get_fontname())
             if self.show_gradient_graph_val.get() or self.show_curve_graph_val.get():

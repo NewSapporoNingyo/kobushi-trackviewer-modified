@@ -399,6 +399,32 @@ class Mapplot():
                 i += 1
         return sections
 
+    def get_track_info_at(self, distance):
+        own = self.environment.owntrack_pos
+        if len(own) == 0 or distance < own[0][0] or distance > own[-1][0]:
+            return None
+        idx = np.searchsorted(own[:, 0], distance)
+        if idx >= len(own):
+            idx = len(own) - 1
+        pos = own[idx]
+        mileage = distance - self.distance_origin
+        elevation = pos[3] - self.height_origin
+        gradient = pos[6]
+        radius = pos[5]
+        speed = None
+        for entry in self.environment.speedlimit.data:
+            if entry['distance'] > distance:
+                break
+            speed = entry['speed']
+        return {
+            'distance': distance,
+            'mileage': mileage,
+            'elevation': elevation,
+            'gradient': gradient,
+            'radius': radius,
+            'speed': speed,
+        }
+
     def _distance_filter(self, data, distmin, distmax):
         data = data[data[:, 0] >= distmin]
         data = data[data[:, 0] <= distmax]

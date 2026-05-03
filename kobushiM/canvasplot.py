@@ -33,6 +33,7 @@ class PlotCanvas(ttk.Frame):
         self.lock_y_center = lock_y_center
         self.zoom_x_by_default = zoom_x_by_default
         self.grid_mode = 'fixed'
+        self.interactive = True
         self.background = '#000000'
         self.grid_color = '#333333'
         self.line_color = '#ffffff'
@@ -73,6 +74,8 @@ class PlotCanvas(ttk.Frame):
             self.redraw()
 
     def fit(self, event=None):
+        if not self.interactive:
+            return
         if self.bounds is not None:
             xmin, ymin, xmax, ymax = self.bounds
             width = max(1, self.canvas.winfo_width())
@@ -389,15 +392,22 @@ class PlotCanvas(ttk.Frame):
             return '{:.0f}m'.format(length)
         return '{:.1f}m'.format(length).rstrip('0').rstrip('.')
 
+    def set_cursor(self, name):
+        self.canvas.config(cursor=name)
+
     def _on_resize(self, event=None):
         self.redraw()
 
     def _on_mousewheel(self, event):
+        if not self.interactive:
+            return
         factor = 1.15 if event.delta > 0 else 1 / 1.15
         self._zoom(factor, axis='x' if self.zoom_x_by_default else 'both')
         self.redraw()
 
     def _on_shift_mousewheel(self, event):
+        if not self.interactive:
+            return
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='y')
@@ -408,6 +418,8 @@ class PlotCanvas(ttk.Frame):
             self.redraw()
 
     def _on_control_mousewheel(self, event):
+        if not self.interactive:
+            return
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='both' if self.zoom_x_by_default else 'x')
@@ -423,9 +435,13 @@ class PlotCanvas(ttk.Frame):
             self.scale = max(0.001, min(self.scale * factor, 10000))
 
     def _start_pan(self, event):
+        if not self.interactive:
+            return
         self._last_drag = (event.x, event.y)
 
     def _pan(self, event):
+        if not self.interactive:
+            return
         if self._last_drag is None:
             return
         dx = event.x - self._last_drag[0]
@@ -438,9 +454,13 @@ class PlotCanvas(ttk.Frame):
         self.redraw()
 
     def _start_rotate(self, event):
+        if not self.interactive:
+            return
         self._last_rotate = (event.x, event.y)
 
     def _rotate_drag(self, event):
+        if not self.interactive:
+            return
         if not self.rotate_enabled or self._last_rotate is None:
             return
         width = max(1, self.canvas.winfo_width())

@@ -82,6 +82,19 @@ _translations = {
         'grid.movable': '可動',
         'grid.none': '無',
 
+        # Mode selection
+        'frame.mode': 'モード選択',
+        'mode.pan': '移動',
+        'mode.measure': '測量',
+
+        # Info panel
+        'info.mileage': '里程',
+        'info.elevation': '標高',
+        'info.gradient': '勾配',
+        'info.radius': '曲線半径',
+        'info.speedlimit': '制限速度',
+        'info.no_limit': '制限なし',
+
         # Station jump
         'label.station_jump': '駅移動',
 
@@ -177,6 +190,17 @@ _translations = {
         'grid.movable': 'Movable',
         'grid.none': 'None',
 
+        'frame.mode': 'Mode',
+        'mode.pan': 'Pan',
+        'mode.measure': 'Measure',
+
+        'info.mileage': 'Mileage',
+        'info.elevation': 'Elevation',
+        'info.gradient': 'Gradient',
+        'info.radius': 'Curve Radius',
+        'info.speedlimit': 'Speed Limit',
+        'info.no_limit': 'No limit',
+
         'label.station_jump': 'Station Jump',
 
         'canvas.plan': 'Plan',
@@ -265,6 +289,17 @@ _translations = {
         'grid.fixed': '固定',
         'grid.movable': '可动',
         'grid.none': '无',
+
+        'frame.mode': '模式选择',
+        'mode.pan': '移动',
+        'mode.measure': '测量',
+
+        'info.mileage': '里程',
+        'info.elevation': '标高',
+        'info.gradient': '坡度',
+        'info.radius': '曲线半径',
+        'info.speedlimit': '限速',
+        'info.no_limit': '不限速',
 
         'label.station_jump': '车站跳转',
 
