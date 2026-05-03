@@ -74,6 +74,12 @@ _translations = {
         'chk.gradient_graph': 'Gradient Graph',
         'chk.curve_graph': 'Curve Graph',
 
+        # Grid control
+        'frame.grid': 'グリッド線',
+        'grid.fixed': '固定',
+        'grid.movable': '可動',
+        'grid.none': '無',
+
         # Station jump
         'label.station_jump': '駅移動',
 
@@ -162,6 +168,11 @@ _translations = {
         'chk.gradient_graph': 'Gradient Graph',
         'chk.curve_graph': 'Curve Graph',
 
+        'frame.grid': 'Grid Lines',
+        'grid.fixed': 'Fixed',
+        'grid.movable': 'Movable',
+        'grid.none': 'None',
+
         'label.station_jump': 'Station Jump',
 
         'canvas.plan': 'Plan',
@@ -243,6 +254,11 @@ _translations = {
         'chk.prof_othert': '纵断面其他轨道',
         'chk.gradient_graph': '坡度图',
         'chk.curve_graph': '曲线半径图',
+
+        'frame.grid': '网格线',
+        'grid.fixed': '固定',
+        'grid.movable': '可动',
+        'grid.none': '无',
 
         'label.station_jump': '车站跳转',
 

@@ -111,6 +111,14 @@ class mainwindow(ttk.Frame):
             self.show_gradient_graph_chk.config(text=i18n.get('chk.gradient_graph'))
         if hasattr(self, 'show_curve_graph_chk'):
             self.show_curve_graph_chk.config(text=i18n.get('chk.curve_graph'))
+        if hasattr(self, 'grid_control_label'):
+            self.grid_control_label.config(text=i18n.get('frame.grid'))
+        if hasattr(self, 'grid_fixed_rb'):
+            self.grid_fixed_rb.config(text=i18n.get('grid.fixed'))
+        if hasattr(self, 'grid_movable_rb'):
+            self.grid_movable_rb.config(text=i18n.get('grid.movable'))
+        if hasattr(self, 'grid_none_rb'):
+            self.grid_none_rb.config(text=i18n.get('grid.none'))
         if hasattr(self, 'stationlist_label'):
             self.stationlist_label.config(text=i18n.get('label.station_jump'))
         if hasattr(self, 'menubar'):
@@ -187,6 +195,21 @@ class mainwindow(ttk.Frame):
             onvalue=True, offvalue=False, variable=self.show_curve_graph_val,
             command=self.update_pane_layout)
         self.show_curve_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+
+        self.grid_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
+        self.grid_control.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.grid_control_label = ttk.Label(self.grid_control, text=i18n.get('frame.grid'), font=font_title)
+        self.grid_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
+        self.grid_mode_val = tk.StringVar(value='fixed')
+        self.grid_fixed_rb = ttk.Radiobutton(self.grid_control, text=i18n.get('grid.fixed'),
+            variable=self.grid_mode_val, value='fixed', command=self.on_grid_mode_change)
+        self.grid_fixed_rb.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.grid_movable_rb = ttk.Radiobutton(self.grid_control, text=i18n.get('grid.movable'),
+            variable=self.grid_mode_val, value='movable', command=self.on_grid_mode_change)
+        self.grid_movable_rb.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.grid_none_rb = ttk.Radiobutton(self.grid_control, text=i18n.get('grid.none'),
+            variable=self.grid_mode_val, value='none', command=self.on_grid_mode_change)
+        self.grid_none_rb.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         
         self.dist_range_sel = tk.StringVar(value='all')
         self.dist_range_arb_val = tk.DoubleVar(value=500)
@@ -279,6 +302,8 @@ class mainwindow(ttk.Frame):
 
         self.master.update_idletasks()
         self.plot_all()
+    def on_grid_mode_change(self):
+        self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
     def create_menubar(self):
         self.master.option_add('*tearOff', False)
         

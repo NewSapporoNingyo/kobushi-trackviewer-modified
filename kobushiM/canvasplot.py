@@ -32,6 +32,7 @@ class PlotCanvas(ttk.Frame):
         self.scalebar = scalebar
         self.lock_y_center = lock_y_center
         self.zoom_x_by_default = zoom_x_by_default
+        self.grid_mode = 'fixed'
         self.background = '#000000'
         self.grid_color = '#333333'
         self.line_color = '#ffffff'
@@ -111,6 +112,10 @@ class PlotCanvas(ttk.Frame):
         self.rotation = state['rotation']
         if self.lock_y_center:
             self.center[1] = 0
+        self.redraw()
+
+    def set_grid_mode(self, mode):
+        self.grid_mode = mode
         self.redraw()
 
     def redraw(self):
@@ -197,6 +202,11 @@ class PlotCanvas(ttk.Frame):
             self.canvas.create_text(sx + offset[0], sy + offset[1], **kwargs)
 
     def _draw_grid(self):
+        if self.grid_mode == 'none':
+            return
+        if self.grid_mode == 'movable':
+            self._draw_world_grid_square()
+            return
         if self.world_grid:
             self._draw_world_grid()
             return
@@ -207,6 +217,45 @@ class PlotCanvas(ttk.Frame):
             self.canvas.create_line(x, 0, x, height, fill=self.grid_color)
         for y in range(0, height + spacing, spacing):
             self.canvas.create_line(0, y, width, y, fill=self.grid_color)
+
+    def _draw_world_grid_square(self):
+        width = max(1, self.canvas.winfo_width())
+        height = max(1, self.canvas.winfo_height())
+        corners = [
+            self.screen_to_world(0, 0),
+            self.screen_to_world(width, 0),
+            self.screen_to_world(0, height),
+            self.screen_to_world(width, height),
+        ]
+        xmin = min(point[0] for point in corners)
+        xmax = max(point[0] for point in corners)
+        ymin = min(point[1] for point in corners)
+        ymax = max(point[1] for point in corners)
+        step = self._grid_step(max(xmax - xmin, ymax - ymin))
+        x0 = math.floor(xmin / step) * step
+        y0 = math.floor(ymin / step) * step
+        x = x0
+        while x <= xmax + step:
+            p1 = self.world_to_screen(x, ymin)
+            p2 = self.world_to_screen(x, ymax)
+            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
+            if p1[0] >= -60 and p1[0] <= width + 60:
+                self.canvas.create_text(
+                    p1[0] + 3, height - 16, anchor='sw',
+                    text=self._format_grid_label(x, self.x_unit),
+                    fill='#888888', font=(self.font_family, 8))
+            x += step
+        y = y0
+        while y <= ymax + step:
+            p1 = self.world_to_screen(xmin, y)
+            p2 = self.world_to_screen(xmax, y)
+            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
+            if p1[1] >= -20 and p1[1] <= height + 20:
+                self.canvas.create_text(
+                    6, p1[1] - 2, anchor='sw',
+                    text=self._format_grid_label(y, self.y_unit),
+                    fill='#888888', font=(self.font_family, 8))
+            y += step
 
     def _draw_world_grid(self):
         width = max(1, self.canvas.winfo_width())
