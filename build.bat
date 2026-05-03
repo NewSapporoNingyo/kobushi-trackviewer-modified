@@ -1,1 +1,2 @@
 python -m nuitka --standalone --follow-imports --enable-plugin=tk-inter --enable-plugin=matplotlib --enable-plugin=numpy --include-data-dir=kobushiM=kobushiM --include-package-data=ttkwidgets launcher.py
+pause
