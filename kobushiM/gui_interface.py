@@ -166,7 +166,7 @@ class mainwindow(ttk.Frame):
         font_title = font.Font(weight='bold',size=10)
         
         self.aux_values_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.aux_values_control.grid(column=0, row=0, sticky=(tk.S, tk.W, tk.E))
+        self.aux_values_control.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
         self.aux_val_label = ttk.Label(self.aux_values_control, text=i18n.get('frame.aux_info'), font = font_title)
         self.aux_val_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.stationpos_val = tk.BooleanVar(value=True)
@@ -189,31 +189,31 @@ class mainwindow(ttk.Frame):
         self.speedlimit_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
 
         self.graph_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.graph_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.graph_control.grid(column=0, row=3, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
         self.graph_control_label = ttk.Label(self.graph_control, text=i18n.get('frame.chart_visibility'), font=font_title)
         self.graph_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
-        self.show_gradient_graph_val = tk.BooleanVar(value=True)
-        self.show_gradient_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_graph'),
-            onvalue=True, offvalue=False, variable=self.show_gradient_graph_val,
-            command=self.update_pane_layout)
-        self.show_gradient_graph_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
-        self.gradientpos_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_pos'),
-            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
-        self.gradientpos_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
-        self.gradientval_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_val'),
-            onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
-        self.gradientval_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
-        self.prof_othert_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.prof_othert'),
-            onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
-        self.prof_othert_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
         self.show_curve_graph_val = tk.BooleanVar(value=True)
         self.show_curve_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.curve_graph'),
             onvalue=True, offvalue=False, variable=self.show_curve_graph_val,
             command=self.update_pane_layout)
-        self.show_curve_graph_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
+        self.show_curve_graph_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.show_gradient_graph_val = tk.BooleanVar(value=True)
+        self.show_gradient_graph_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_graph'),
+            onvalue=True, offvalue=False, variable=self.show_gradient_graph_val,
+            command=self.update_pane_layout)
+        self.show_gradient_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.gradientpos_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_pos'),
+            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
+        self.gradientpos_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
+        self.gradientval_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_val'),
+            onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
+        self.gradientval_chk.grid(column=0, row=4, sticky=(tk.N, tk.W, tk.E))
+        self.prof_othert_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.prof_othert'),
+            onvalue=True, offvalue=False, variable=self.prof_othert_val, command=self.plot_all)
+        self.prof_othert_chk.grid(column=0, row=5, sticky=(tk.N, tk.W, tk.E))
 
         self.grid_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.grid_control.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.grid_control.grid(column=0, row=1, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
         self.grid_control_label = ttk.Label(self.grid_control, text=i18n.get('frame.grid'), font=font_title)
         self.grid_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.grid_mode_val = tk.StringVar(value='fixed')
@@ -228,7 +228,7 @@ class mainwindow(ttk.Frame):
         self.grid_none_rb.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
 
         self.mode_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
-        self.mode_control.grid(column=0, row=3, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+        self.mode_control.grid(column=0, row=0, sticky=(tk.S, tk.W, tk.E))
         self.mode_control_label = ttk.Label(self.mode_control, text=i18n.get('frame.mode'), font=font_title)
         self.mode_control_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.mode_val = tk.StringVar(value='pan')
