@@ -73,7 +73,7 @@ _translations = {
         'chk.prof_othert': '縦断面図他軌道',
         'chk.speedlimit': '速度制限',
 
-        'chk.gradient_graph': '勾配図',
+        'chk.gradient_graph': '縦断面図',
         'chk.curve_graph': '曲線半径図',
 
         # Grid control
@@ -100,7 +100,7 @@ _translations = {
 
         # Canvas titles
         'canvas.plan': '平面図',
-        'canvas.profile': '勾配図 / 標高',
+        'canvas.profile': '縦断面図 / 標高',
         'canvas.radius': '曲線半径',
 
         # Treeview headings
@@ -128,7 +128,7 @@ _translations = {
         'dialog.distance_prompt': '{label} (既定値: {value} m)',
 
         # About dialog
-        'about.text': 'Kobushi trackviewer\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
+        'about.text': 'Kobushi trackviewer(Modified)\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
         # Misc
         'unit.m': 'm',
@@ -229,7 +229,7 @@ _translations = {
         'dialog.distance_title': '{trackkey}: Distance',
         'dialog.distance_prompt': '{label} (default: {value} m)',
 
-        'about.text': 'Kobushi trackviewer\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
+        'about.text': 'Kobushi trackviewer(Modified)\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
         'unit.m': 'm',
         'unit.km': 'km',
@@ -282,7 +282,7 @@ _translations = {
         'chk.prof_othert': '纵断面其他轨道',
         'chk.speedlimit': '限速',
 
-        'chk.gradient_graph': '坡度图',
+        'chk.gradient_graph': '纵断面图',
         'chk.curve_graph': '曲线半径图',
 
         'frame.grid': '网格线',
@@ -299,12 +299,12 @@ _translations = {
         'info.gradient': '坡度',
         'info.radius': '曲线半径',
         'info.speedlimit': '限速',
-        'info.no_limit': '不限速',
+        'info.no_limit': '无',
 
         'label.station_jump': '车站跳转',
 
         'canvas.plan': '平面图',
-        'canvas.profile': '坡度 / 标高',
+        'canvas.profile': '纵断面 / 标高',
         'canvas.radius': '曲线半径',
 
         'tree.track_key': '轨道编号',
@@ -329,7 +329,7 @@ _translations = {
         'dialog.distance_title': '{trackkey}：距离',
         'dialog.distance_prompt': '{label}（默认值：{value} m）',
 
-        'about.text': 'Kobushi trackviewer\n版本 {version}\n\nCopyright © 2021-2024 konawasabi\n基于 Apache License, Version 2.0 发布。\nhttps://www.apache.org/licenses/LICENSE-2.0',
+        'about.text': 'Kobushi trackviewer(Modified)\n版本 {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\n基于 Apache License, Version 2.0 发布。\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
         'unit.m': 'm',
         'unit.km': 'km',

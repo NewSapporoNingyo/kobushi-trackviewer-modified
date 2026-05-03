@@ -255,8 +255,11 @@ class mainwindow(ttk.Frame):
         self.setdist_frame = ttk.Frame(self, padding='3 3 3 3')
         self.setdist_frame.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E))
 
+        self.measure_info_label = ttk.Label(self.setdist_frame, text='', font=font_title)
+        self.measure_info_label.grid(column=0, row=0, sticky=(tk.W), padx=(6, 0), pady=(2, 6))
+
         self.stationlist_frame = ttk.Frame(self.setdist_frame, padding='0 0 0 0')
-        self.stationlist_frame.grid(column=0, row=0, sticky=(tk.E))
+        self.stationlist_frame.grid(column=1, row=0, sticky=(tk.E))
         self.stationlist_label = ttk.Label(self.stationlist_frame, text=i18n.get('label.station_jump'), font = font_title)
         self.stationlist_label.grid(column=0, row=0, sticky=(tk.W))
         self.stationlist_val = tk.StringVar()
@@ -264,10 +267,8 @@ class mainwindow(ttk.Frame):
         self.stationlist_cb.grid(column=1, row=0, sticky=(tk.W, tk.E))
         self.stationlist_cb.bind('<<ComboboxSelected>>', self.jumptostation)
 
-        self.measure_info_label = ttk.Label(self, text='', font=font_title)
-        self.measure_info_label.grid(column=0, row=3, sticky=(tk.W), padx=(6, 0), pady=(2, 6))
-        
         self.setdist_frame.columnconfigure(0, weight=1)
+        self.setdist_frame.columnconfigure(1, weight=0)
         self.setdist_frame.rowconfigure(0, weight=1)
         
         self.canvas_frame = ttk.Frame(self, padding='3 3 3 3')
@@ -297,7 +298,6 @@ class mainwindow(ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
-        self.rowconfigure(3, weight=0)
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
         show_curve = self.show_curve_graph_val.get()
