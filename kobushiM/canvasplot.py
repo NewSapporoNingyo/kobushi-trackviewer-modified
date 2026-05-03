@@ -34,6 +34,7 @@ class PlotCanvas(ttk.Frame):
         self.zoom_x_by_default = zoom_x_by_default
         self.grid_mode = 'fixed'
         self.interactive = True
+        self._view_fitted = False
         self.background = '#000000'
         self.grid_color = '#333333'
         self.line_color = '#ffffff'
@@ -68,7 +69,7 @@ class PlotCanvas(ttk.Frame):
         self.renderer = renderer
         if bounds is not None:
             self.bounds = bounds
-        if not keep_view or self.scale <= 1.0:
+        if not keep_view or not self._view_fitted:
             self.fit()
         else:
             self.redraw()
@@ -86,6 +87,7 @@ class PlotCanvas(ttk.Frame):
             self.scale = min(width / dx, height / dy) * 0.88
             self.scale_x = width / dx * 0.88
             self.scale_y = height / dy * 0.88
+        self._view_fitted = True
         self.redraw()
 
     def reset_rotation(self):
@@ -115,6 +117,7 @@ class PlotCanvas(ttk.Frame):
         self.rotation = state['rotation']
         if self.lock_y_center:
             self.center[1] = 0
+        self._view_fitted = True
         self.redraw()
 
     def set_grid_mode(self, mode):
@@ -426,6 +429,7 @@ class PlotCanvas(ttk.Frame):
             self.redraw()
 
     def _zoom(self, factor, axis='both'):
+        self._view_fitted = True
         if self.independent_scale:
             if axis in ['both', 'x']:
                 self.scale_x = max(0.001, min(self.scale_x * factor, 10000))
