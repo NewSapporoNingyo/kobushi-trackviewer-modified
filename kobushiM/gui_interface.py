@@ -203,7 +203,7 @@ class mainwindow(ttk.Frame):
             command=self.update_pane_layout)
         self.show_gradient_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
         self.gradientpos_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_pos'),
-            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
+            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.on_gradientpos_toggle)
         self.gradientpos_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         self.gradientval_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_val'),
             onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
@@ -344,6 +344,12 @@ class mainwindow(ttk.Frame):
         else:
             self.stationlabel_chk.config(state='disabled')
             self.stationmileage_chk.config(state='disabled')
+        self.plot_all()
+    def on_gradientpos_toggle(self):
+        if self.gradientpos_val.get():
+            self.gradientval_chk.config(state='normal')
+        else:
+            self.gradientval_chk.config(state='disabled')
         self.plot_all()
     def on_grid_mode_change(self):
         self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
