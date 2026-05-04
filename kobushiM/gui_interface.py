@@ -170,7 +170,7 @@ class mainwindow(ttk.Frame):
         self.aux_val_label = ttk.Label(self.aux_values_control, text=i18n.get('frame.aux_info'), font = font_title)
         self.aux_val_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.stationpos_val = tk.BooleanVar(value=True)
-        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_pos'),onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.plot_all)
+        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_pos'),onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.on_stationpos_toggle)
         self.stationpos_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
         self.stationlabel_val = tk.BooleanVar(value=True)
         self.stationlabel_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_name'),onvalue=True, offvalue=False, variable=self.stationlabel_val, command=self.plot_all)
@@ -336,6 +336,14 @@ class mainwindow(ttk.Frame):
                 pass
 
         self.master.update_idletasks()
+        self.plot_all()
+    def on_stationpos_toggle(self):
+        if self.stationpos_val.get():
+            self.stationlabel_chk.config(state='normal')
+            self.stationmileage_chk.config(state='normal')
+        else:
+            self.stationlabel_chk.config(state='disabled')
+            self.stationmileage_chk.config(state='disabled')
         self.plot_all()
     def on_grid_mode_change(self):
         self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
@@ -745,19 +753,20 @@ class mainwindow(ttk.Frame):
             canvas = view.canvas
             height = max(1, canvas.winfo_height())
 
-            for station in data['stations']:
-                x = station['point'][0]
-                z = station['point'][3]
-                screen_x, screen_z = view.world_to_screen(x, z)
-                canvas.create_line(screen_x, screen_z, screen_x, -100, fill='#ffffff', width=1)
-                view.point(x, z, radius=3)
-                if self.stationlabel_val.get():
-                    view.text(x, z, station['name'], offset=(8, -26), font_size=9)
-                if self.stationmileage_val.get():
-                    screen_x, _ = view.world_to_screen(x, 0)
-                    canvas.create_text(screen_x + 8, 8, anchor='nw',
-                        text=self.format_mileage(station['mileage']),
-                        fill='#ffd84d', font=(view.font_family, 8), tags=('fixed_y',))
+            if self.stationpos_val.get():
+                for station in data['stations']:
+                    x = station['point'][0]
+                    z = station['point'][3]
+                    screen_x, screen_z = view.world_to_screen(x, z)
+                    canvas.create_line(screen_x, screen_z, screen_x, -100, fill='#ffffff', width=1)
+                    view.point(x, z, radius=3)
+                    if self.stationlabel_val.get():
+                        view.text(x, z, station['name'], offset=(8, -26), font_size=9)
+                    if self.stationmileage_val.get():
+                        screen_x, _ = view.world_to_screen(x, 0)
+                        canvas.create_text(screen_x + 8, 8, anchor='nw',
+                            text=self.format_mileage(station['mileage']),
+                            fill='#ffd84d', font=(view.font_family, 8), tags=('fixed_y',))
             if self.gradientpos_val.get():
                 for point in data['gradient_points']:
                     screen_x, screen_z = view.world_to_screen(point['x'], point['z'])
