@@ -66,13 +66,22 @@ class LogInterceptor:
 
     def write(self, msg):
         if msg:
-            self.original.write(msg)
+            if self.original is not None and hasattr(self.original, 'write'):
+                try:
+                    self.original.write(msg)
+                except Exception:
+                    pass
+            
             stripped = msg.rstrip('\n\r')
             if stripped:
                 self.queue.put((self.source, stripped))
 
     def flush(self):
-        self.original.flush()
+        if self.original is not None and hasattr(self.original, 'flush'):
+            try:
+                self.original.flush()
+            except Exception:
+                pass
 
 class mainwindow(ttk.Frame):
     def __init__(self, master, parser, stepdist = 25, font = ''):
