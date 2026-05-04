@@ -16,6 +16,8 @@
 import sys
 import pathlib
 import os
+import time
+import queue
 import webbrowser
 import argparse
 
@@ -56,6 +58,22 @@ class Catcher: # tkinter内で起きた例外をキャッチする
                 print(e) # 通常モードならダイアログ表示
                 tk.messagebox.showinfo(message=e)
 
+class LogInterceptor:
+    def __init__(self, original, source, log_queue):
+        self.original = original
+        self.source = source
+        self.queue = log_queue
+
+    def write(self, msg):
+        if msg:
+            self.original.write(msg)
+            stripped = msg.rstrip('\n\r')
+            if stripped:
+                self.queue.put((self.source, stripped))
+
+    def flush(self):
+        self.original.flush()
+
 class mainwindow(ttk.Frame):
     def __init__(self, master, parser, stepdist = 25, font = ''):
         self.dmin = None
@@ -84,8 +102,15 @@ class mainwindow(ttk.Frame):
         self.parser = parser
         self._measure_marker_ids = {}
 
+        self._log_queue = queue.Queue()
+        self._log_errors = []
+        self._log_warnings = []
+        sys.stdout = LogInterceptor(sys.stdout, 'stdout', self._log_queue)
+        sys.stderr = LogInterceptor(sys.stderr, 'stderr', self._log_queue)
+
         i18n.on_language_change(self.refresh_ui_text)
         self.refresh_ui_text()
+        self.after(100, self.check_log_queue)
 
     def refresh_ui_text(self):
         self.master.title(i18n.get('app.title', version=__version__))
@@ -251,6 +276,14 @@ class mainwindow(ttk.Frame):
         self.filedir_entry_val = tk.StringVar()
         self.filedir_entry = ttk.Entry(self.file_frame, width=75, textvariable=self.filedir_entry_val)
         self.filedir_entry.grid(column=1, row=0, sticky=(tk.W, tk.E))
+        self._log_err_btn = ttk.Button(self.file_frame, text='🐛 0', width=7, command=self._show_error_details)
+        self._log_err_btn.grid(column=2, row=0, sticky=(tk.W), padx=(2, 0))
+        self._log_warn_btn = ttk.Button(self.file_frame, text='⚠ 0', width=7, command=self._show_warning_details)
+        self._log_warn_btn.grid(column=3, row=0, sticky=(tk.W), padx=(2, 0))
+        self._log_last_msg = tk.StringVar(value='')
+        self._log_last_label = ttk.Label(self.file_frame, textvariable=self._log_last_msg, width=50, anchor=tk.W, relief=tk.SUNKEN, padding=(4, 1))
+        self._log_last_label.grid(column=4, row=0, sticky=(tk.W, tk.E), padx=(4, 0))
+        self.file_frame.columnconfigure(4, weight=1)
         
         self.setdist_frame = ttk.Frame(self, padding='3 3 3 3')
         self.setdist_frame.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E))
@@ -351,6 +384,59 @@ class mainwindow(ttk.Frame):
         else:
             self.gradientval_chk.config(state='disabled')
         self.plot_all()
+    def check_log_queue(self):
+        try:
+            while True:
+                source, msg = self._log_queue.get_nowait()
+                if source == 'stderr' or 'error' in msg.lower():
+                    self._log_errors.append(msg)
+                elif 'warning' in msg.lower():
+                    self._log_warnings.append(msg)
+                self._log_last_msg.set(msg[-100:])
+        except queue.Empty:
+            pass
+        wc = len(self._log_warnings)
+        ec = len(self._log_errors)
+        if wc > 0:
+            self._log_warn_btn.config(text='⚠ {:d}'.format(wc))
+        if ec > 0:
+            self._log_err_btn.config(text='🐛 {:d}'.format(ec))
+        self.after(100, self.check_log_queue)
+
+    def _clear_logs(self):
+        self._log_errors.clear()
+        self._log_warnings.clear()
+        self._log_last_msg.set('')
+        self._log_err_btn.config(text='🐛 0')
+        self._log_warn_btn.config(text='⚠ 0')
+
+    def _show_error_details(self):
+        self._show_log_detail_window('Errors', self._log_errors)
+
+    def _show_warning_details(self):
+        self._show_log_detail_window('Warnings', self._log_warnings)
+
+    def _show_log_detail_window(self, title, messages):
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.geometry('700x400')
+        win.transient(self)
+        frame = ttk.Frame(win, padding='3 3 3 3')
+        frame.pack(fill=tk.BOTH, expand=True)
+        text = tk.Text(frame, wrap=tk.WORD, font=('Consolas', 9))
+        scroll = ttk.Scrollbar(frame, command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+        if messages:
+            for msg in messages:
+                text.insert(tk.END, msg + '\n')
+        else:
+            text.insert(tk.END, 'No messages')
+        text.config(state=tk.DISABLED)
+
     def on_grid_mode_change(self):
         self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
     def on_mode_change(self):
@@ -551,6 +637,8 @@ class mainwindow(ttk.Frame):
         if inputdir != '':
             self.filedir_entry_val.set(inputdir)
             
+            self._clear_logs()
+            t_start = time.perf_counter()
             interpreter = interp.ParseMap(None,self.parser)
             self.result = interpreter.load_files(inputdir)
             
@@ -593,6 +681,8 @@ class mainwindow(ttk.Frame):
             
             self.mplot = mapplot.Mapplot(self.result, unitdist_default=self.default_track_interval)
             self.setdist_all()
+            t_end = time.perf_counter()
+            print('Map loaded in {:.2f}s'.format(t_end - t_start))
             
             self.print_debugdata()
     def reload_map(self, event=None):
@@ -604,6 +694,8 @@ class mainwindow(ttk.Frame):
             tmp_othertrack_linecolor = self.result.othertrack_linecolor
             tmp_othertrack_cprange   = self.result.othertrack.cp_range
             
+            self._clear_logs()
+            t_start = time.perf_counter()
             interpreter = interp.ParseMap(None,self.parser)
             self.result = interpreter.load_files(inputdir)
             
@@ -654,6 +746,8 @@ class mainwindow(ttk.Frame):
             self.mplot = mapplot.Mapplot(self.result,cp_arbdistribution = tmp_cp_arbdistribution)
             self.plot_all(keep_view=True)
             self.set_view_state(view_state)
+            t_end = time.perf_counter()
+            print('Map loaded in {:.2f}s'.format(t_end - t_start))
             
             self.print_debugdata()
     def draw_planerplot(self):
