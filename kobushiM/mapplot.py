@@ -15,6 +15,7 @@
 '''
 
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from . import trackgenerator as tgen
 from . import i18n
 
@@ -30,8 +31,15 @@ class Mapplot():
         self.environment.owntrack_curve = trackgenerator.generate_curveradius_dist()
 
         self.environment.othertrack_pos = {}
-        for key in self.environment.othertrack.data.keys():
-            self.environment.othertrack_pos[key] = tgen.OtherTrackGenerator(self.environment, key).generate()
+        othertrack_keys = list(self.environment.othertrack.data.keys())
+        with ThreadPoolExecutor() as executor:
+            futures = {
+                executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key 
+                for key in othertrack_keys
+            }
+            for future in as_completed(futures):
+                key = futures[future]
+                self.environment.othertrack_pos[key] = future.result()
 
         self.distrange = {}
         self.distrange['plane'] = [

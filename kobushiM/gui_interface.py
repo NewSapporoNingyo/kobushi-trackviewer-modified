@@ -815,7 +815,7 @@ class mainwindow(ttk.Frame):
         self.plane_canvas.set_view_state(state['plane'])
         self.profile_canvas.set_view_state(state['profile'])
         self.radius_canvas.set_view_state(state['radius'])
-    def plot_all(self, keep_view=False):
+    def plot_all(self, keep_view=True):
         if(self.result != None):
             self._clear_measure_marker()
             self.keep_view_on_next_draw = keep_view
