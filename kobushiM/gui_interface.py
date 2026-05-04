@@ -348,10 +348,16 @@ class mainwindow(ttk.Frame):
             self.plane_canvas.canvas.bind('<Motion>', self.on_plan_motion)
             self.profile_canvas.canvas.bind('<Motion>', self.on_profile_motion)
             self.radius_canvas.canvas.bind('<Motion>', self.on_radius_motion)
+            for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+                cv.canvas.unbind('<Double-Button-1>')
+                cv.canvas.bind('<Double-Button-1>', self.on_measure_double_click)
         else:
             self.plane_canvas.canvas.unbind('<Motion>')
             self.profile_canvas.canvas.unbind('<Motion>')
             self.radius_canvas.canvas.unbind('<Motion>')
+            for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+                cv.canvas.unbind('<Double-Button-1>')
+                cv.canvas.bind('<Double-Button-1>', cv.fit)
             self.plane_canvas.set_cursor('')
             self.profile_canvas.set_cursor('')
             self.radius_canvas.set_cursor('')
@@ -447,6 +453,30 @@ class mainwindow(ttk.Frame):
         self.measure_pos = {'distance': wx}
         self._sync_measure_markers(wx)
         self.update_measure_info()
+    def on_measure_double_click(self, event):
+        if self.measure_pos is None or self.result is None:
+            return 'break'
+        distance = self.measure_pos['distance']
+        own = self.result.owntrack_pos
+        if len(own) == 0 or distance < own[0][0] or distance > own[-1][0]:
+            return 'break'
+        idx = np.searchsorted(own[:, 0], distance)
+        if idx >= len(own):
+            idx = len(own) - 1
+        clicked = event.widget
+        for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+            if cv.canvas is clicked:
+                continue
+            if cv is self.plane_canvas:
+                x, y = own[idx][1], own[idx][2]
+                angle = self.mplot.origin_angle
+                c, s = np.cos(-angle), np.sin(-angle)
+                cv.center = [float(c * x - s * y), float(s * x + c * y)]
+            else:
+                cv.center[0] = distance
+            cv.redraw()
+        self._sync_measure_markers(distance)
+        return 'break'
     def update_measure_info(self):
         if self.measure_pos is None or self.mplot is None:
             self.measure_info_label.config(text='')
