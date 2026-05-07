@@ -53,7 +53,7 @@ fn main() -> Result<(), eframe::Error> {
     };
 
     eframe::run_native(
-        "Kobushi Track Viewer",
+        "Kobushi.rs",
         options,
         Box::new(move |_cc| {
             let mut app = App::new(step, &font_name);
