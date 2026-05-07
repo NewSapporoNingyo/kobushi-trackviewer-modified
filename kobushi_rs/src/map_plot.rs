@@ -35,9 +35,23 @@ impl MapPlot {
             env.othertrack_pos.insert(key, pos);
         }
 
+        if env.owntrack_pos.is_empty() {
+            return MapPlot {
+                environment: env,
+                distance_origin: 0.0,
+                height_origin: 0.0,
+                origin_angle: 0.0,
+                distrange_plane: (0.0, 0.0),
+                distrange_vertical: (0.0, 0.0),
+                station_dist: Vec::new(),
+                station_pos: Vec::new(),
+                no_station: true,
+            };
+        }
+
         let distrange = (
-            env.owntrack_pos[0][0],
-            env.owntrack_pos[env.owntrack_pos.len() - 1][0],
+            env.owntrack_pos.first().map(|r| r[0]).unwrap_or(0.0),
+            env.owntrack_pos.last().map(|r| r[0]).unwrap_or(0.0),
         );
         let start_distance = distrange.0;
         let height_origin = env
@@ -46,7 +60,7 @@ impl MapPlot {
             .find(|r| (r[0] - start_distance).abs() < 1e-9)
             .map(|r| r[3])
             .unwrap_or(0.0);
-        let origin_angle = env.owntrack_pos[0][4];
+        let origin_angle = env.owntrack_pos.first().map(|r| r[4]).unwrap_or(0.0);
 
         let (station_dist, station_pos, no_station) = if !env.station.position.is_empty() {
             let dist: Vec<f64> = env.station.position.keys().map(|k| k.0).collect();

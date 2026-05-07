@@ -5,6 +5,7 @@ use crate::map_plot::*;
 use crate::parser;
 
 use egui::*;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 #[derive(PartialEq, Clone, Copy)]
@@ -24,6 +25,10 @@ pub struct App {
     // State
     map_plot: Option<MapPlot>,
     env: Option<Environment>,
+
+    // Error handling
+    error_state: Arc<Mutex<Option<String>>>,
+    error_message: Option<String>,
 
     // Canvas states
     plane_canvas: CanvasState,
@@ -86,7 +91,7 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(step: f64, font: &str) -> Self {
+    pub fn new(step: f64, font: &str, error_state: Arc<Mutex<Option<String>>>) -> Self {
         let plane = CanvasState {
             title: "Plan".to_string(),
             y_axis_down: true,
@@ -142,6 +147,8 @@ impl App {
         App {
             map_plot: None,
             env: None,
+            error_state,
+            error_message: None,
             plane_canvas: plane,
             profile_canvas: profile,
             radius_canvas: radius,
@@ -302,7 +309,9 @@ impl App {
                 self.map_plot = Some(map_plot);
             }
             Err(e) => {
-                self.status_text = format!("Error: {}", e);
+                let msg = format!("Error loading file: {}", e);
+                self.status_text = msg.clone();
+                self.error_message = Some(msg);
             }
         }
     }
@@ -355,6 +364,7 @@ impl App {
         };
         let Some(path) = rfd::FileDialog::new()
             .add_filter("SVG", &["svg"])
+            .add_filter("PNG", &["png"])
             .set_file_name("kobushi.svg")
             .save_file()
         else {
@@ -362,18 +372,66 @@ impl App {
         };
 
         let checked = self.get_checked_other_tracks();
-        let result = write_plot_svgs(
-            &path,
-            map_plot,
-            self.dmin,
-            self.dmax,
-            &checked,
-            self.show_prof_othert,
-        );
+        let is_png = path
+            .extension()
+            .map(|e| e.to_str().unwrap_or("") == "png")
+            .unwrap_or(false);
+
+        let result = if is_png {
+            self.save_plots_png(&path, map_plot, self.dmin, self.dmax, &checked, self.show_prof_othert)
+        } else {
+            write_plot_svgs(
+                &path,
+                map_plot,
+                self.dmin,
+                self.dmax,
+                &checked,
+                self.show_prof_othert,
+            )
+        };
         self.status_text = match result {
             Ok(()) => format!("Plots saved near {}", path.display()),
             Err(e) => format!("Save error: {}", e),
         };
+    }
+
+    fn save_plots_png(
+        &self,
+        base_path: &std::path::Path,
+        map_plot: &MapPlot,
+        dmin: Option<f64>,
+        dmax: Option<f64>,
+        checked_othertracks: &[String],
+        show_profile_othertracks: bool,
+    ) -> std::io::Result<()> {
+        let plane = map_plot.plane_data(dmin, dmax, checked_othertracks);
+        let profile_other = if show_profile_othertracks { checked_othertracks } else { &[] };
+        let profile = map_plot.profile_data(dmin, dmax, profile_other, None);
+
+        let stem = base_path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("kobushi");
+
+        // Save plan view as PNG
+        if !plane.owntrack.is_empty() {
+            let path = base_path.with_file_name(format!("{}_plan.png", stem));
+            write_png_image(&path, &render_plane_to_pixels(&plane, 1920, 1080))?;
+        }
+
+        // Save profile view as PNG
+        if !profile.owntrack.is_empty() {
+            let path = base_path.with_file_name(format!("{}_profile.png", stem));
+            write_png_image(&path, &render_profile_to_pixels(&profile, 1920, 1080))?;
+        }
+
+        // Save radius view as PNG
+        if !profile.curve.is_empty() {
+            let path = base_path.with_file_name(format!("{}_radius.png", stem));
+            write_png_image(&path, &render_radius_to_pixels(&profile, 1920, 1080))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -472,6 +530,28 @@ impl eframe::App for App {
 
         // Dialogs
         self.show_dialogs(ctx);
+
+        // Check for panics / errors from other threads
+        if let Ok(mut guard) = self.error_state.lock() {
+            if let Some(msg) = guard.take() {
+                self.error_message = Some(msg);
+            }
+        }
+
+        // Error modal
+        if let Some(ref msg) = self.error_message.clone() {
+                egui::Window::new(i18n::get("dialog.error_title"))
+                .collapsible(false)
+                .resizable(false)
+                .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+                .show(ctx, |ui| {
+                    ui.colored_label(Color32::from_rgb(0xff, 0x55, 0x55), msg);
+                    ui.add_space(8.0);
+                    if ui.button("OK").clicked() {
+                        self.error_message = None;
+                    }
+                });
+        }
 
         // Main layout
         egui::SidePanel::right("control_panel")
@@ -1544,33 +1624,48 @@ fn color_to_hex(color: Color32) -> String {
 }
 
 fn write_owntrack_csv(path: &std::path::Path, data: &[[f64; 11]]) -> std::io::Result<()> {
-    let mut file = std::fs::File::create(path)?;
-    use std::io::Write;
-    writeln!(
-        file,
-        "distance,x,y,z,direction,radius,gradient,interpolate_func,cant,center,gauge"
-    )?;
+    let mut wtr = csv::Writer::from_path(path)?;
+    wtr.write_record(&[
+        "distance", "x", "y", "z", "direction", "radius", "gradient",
+        "interpolate_func", "cant", "center", "gauge",
+    ])?;
     for row in data {
-        writeln!(
-            file,
-            "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
-            row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10],
-        )?;
+        wtr.write_record(&[
+            format!("{:.6}", row[0]),
+            format!("{:.6}", row[1]),
+            format!("{:.6}", row[2]),
+            format!("{:.6}", row[3]),
+            format!("{:.6}", row[4]),
+            format!("{:.6}", row[5]),
+            format!("{:.6}", row[6]),
+            format!("{:.6}", row[7]),
+            format!("{:.6}", row[8]),
+            format!("{:.6}", row[9]),
+            format!("{:.6}", row[10]),
+        ])?;
     }
+    wtr.flush()?;
     Ok(())
 }
 
 fn write_othertrack_csv(path: &std::path::Path, data: &[[f64; 8]]) -> std::io::Result<()> {
-    let mut file = std::fs::File::create(path)?;
-    use std::io::Write;
-    writeln!(file, "distance,x,y,z,interpolate_func,cant,center,gauge")?;
+    let mut wtr = csv::Writer::from_path(path)?;
+    wtr.write_record(&[
+        "distance", "x", "y", "z", "interpolate_func", "cant", "center", "gauge",
+    ])?;
     for row in data {
-        writeln!(
-            file,
-            "{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6},{:.6}",
-            row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7],
-        )?;
+        wtr.write_record(&[
+            format!("{:.6}", row[0]),
+            format!("{:.6}", row[1]),
+            format!("{:.6}", row[2]),
+            format!("{:.6}", row[3]),
+            format!("{:.6}", row[4]),
+            format!("{:.6}", row[5]),
+            format!("{:.6}", row[6]),
+            format!("{:.6}", row[7]),
+        ])?;
     }
+    wtr.flush()?;
     Ok(())
 }
 
@@ -1846,4 +1941,198 @@ fn escape_xml(value: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+}
+
+// ========== PNG image export ==========
+
+fn write_png_image(path: &std::path::Path, pixels: &image::RgbaImage) -> std::io::Result<()> {
+    pixels
+        .save(path)
+        .map_err(std::io::Error::other)
+}
+
+type PixelBuffer = image::ImageBuffer<image::Rgba<u8>, Vec<u8>>;
+
+fn render_plane_to_pixels(data: &PlaneData, img_w: u32, img_h: u32) -> PixelBuffer {
+    let margin = 48u32;
+    let (xmin, ymin, xmax, ymax) = normalize_bounds(data.bounds);
+    let scale = ((img_w - margin * 2) as f64 / (xmax - xmin))
+        .min((img_h - margin * 2) as f64 / (ymax - ymin))
+        .max(1e-9);
+    let content_w = (xmax - xmin) * scale;
+    let content_h = (ymax - ymin) * scale;
+    let x_off = margin as f64 + ((img_w - margin * 2) as f64 - content_w) / 2.0;
+    let y_off = margin as f64 + ((img_h - margin * 2) as f64 - content_h) / 2.0;
+
+    let project = |x: f64, y: f64| -> (i32, i32) {
+        let sx = x_off + (x - xmin) * scale;
+        let sy = y_off + (y - ymin) * scale;
+        (sx.round() as i32, sy.round() as i32)
+    };
+
+    let mut img = PixelBuffer::from_pixel(img_w, img_h, image::Rgba([0, 0, 0, 255]));
+
+    // Curve sections background
+    for sec in &data.curve_sections {
+        let pts: Vec<(i32, i32)> = data
+            .owntrack
+            .iter()
+            .filter(|r| r[0] >= sec.start && r[0] <= sec.end)
+            .map(|r| project(r[1], r[2]))
+            .collect();
+        draw_polyline(&mut img, &pts, [0x88, 0x88, 0x88, 255], 5);
+    }
+
+    // Transition sections background
+    for sec in &data.transition_sections {
+        let pts: Vec<(i32, i32)> = data
+            .owntrack
+            .iter()
+            .filter(|r| r[0] >= sec.start && r[0] <= sec.end)
+            .map(|r| project(r[1], r[2]))
+            .collect();
+        draw_polyline(&mut img, &pts, [0x55, 0x55, 0x55, 255], 3);
+    }
+
+    // Own track
+    let own_pts: Vec<(i32, i32)> = data.owntrack.iter().map(|r| project(r[1], r[2])).collect();
+    draw_polyline(&mut img, &own_pts, [0xff, 0xff, 0xff, 255], 1);
+
+    // Other tracks
+    for ot in &data.othertracks {
+        let hex = ot.color.trim_start_matches('#');
+        let color = if hex.len() == 6 {
+            [
+                u8::from_str_radix(&hex[0..2], 16).unwrap_or(255),
+                u8::from_str_radix(&hex[2..4], 16).unwrap_or(255),
+                u8::from_str_radix(&hex[4..6], 16).unwrap_or(255),
+                255,
+            ]
+        } else {
+            [255, 255, 255, 255]
+        };
+        let pts: Vec<(i32, i32)> = ot.points.iter().map(|p| project(p[0], p[1])).collect();
+        draw_polyline(&mut img, &pts, color, 1);
+    }
+
+    img
+}
+
+fn render_profile_to_pixels(data: &ProfileData, img_w: u32, img_h: u32) -> PixelBuffer {
+    let margin = 48u32;
+    let (xmin, ymin, xmax, ymax) = normalize_bounds(data.bounds);
+    let scale = ((img_w - margin * 2) as f64 / (xmax - xmin))
+        .min((img_h - margin * 2) as f64 / (ymax - ymin))
+        .max(1e-9);
+    let content_w = (xmax - xmin) * scale;
+    let content_h = (ymax - ymin) * scale;
+    let x_off = margin as f64 + ((img_w - margin * 2) as f64 - content_w) / 2.0;
+    let y_off = margin as f64 + ((img_h - margin * 2) as f64 - content_h) / 2.0;
+
+    let project = |x: f64, y: f64| -> (i32, i32) {
+        let sx = x_off + (x - xmin) * scale;
+        let sy = y_off + (ymax - y) * scale;
+        (sx.round() as i32, sy.round() as i32)
+    };
+
+    let mut img = PixelBuffer::from_pixel(img_w, img_h, image::Rgba([0, 0, 0, 255]));
+
+    // Own track
+    let own_pts: Vec<(i32, i32)> = data.owntrack.iter().map(|r| project(r[0], r[3])).collect();
+    draw_polyline(&mut img, &own_pts, [0xff, 0xff, 0xff, 255], 1);
+
+    // Other tracks
+    for ot in &data.othertracks {
+        let pts: Vec<(i32, i32)> = ot.points.iter().map(|r| project(r[0], r[3])).collect();
+        let hex = ot.color.trim_start_matches('#');
+        let color = if hex.len() == 6 {
+            [
+                u8::from_str_radix(&hex[0..2], 16).unwrap_or(255),
+                u8::from_str_radix(&hex[2..4], 16).unwrap_or(255),
+                u8::from_str_radix(&hex[4..6], 16).unwrap_or(255),
+                255,
+            ]
+        } else {
+            [255, 255, 255, 255]
+        };
+        draw_polyline(&mut img, &pts, color, 1);
+    }
+
+    img
+}
+
+fn render_radius_to_pixels(data: &ProfileData, img_w: u32, img_h: u32) -> PixelBuffer {
+    let margin = 48u32;
+    let (xmin, ymin, xmax, ymax) = normalize_bounds(data.radius_bounds);
+    let scale = ((img_w - margin * 2) as f64 / (xmax - xmin))
+        .min((img_h - margin * 2) as f64 / (ymax - ymin))
+        .max(1e-9);
+    let content_w = (xmax - xmin) * scale;
+    let content_h = (ymax - ymin) * scale;
+    let x_off = margin as f64 + ((img_w - margin * 2) as f64 - content_w) / 2.0;
+    let y_off = margin as f64 + ((img_h - margin * 2) as f64 - content_h) / 2.0;
+
+    let project = |x: f64, y: f64| -> (i32, i32) {
+        let sx = x_off + (x - xmin) * scale;
+        let sy = y_off + (ymax - y) * scale;
+        (sx.round() as i32, sy.round() as i32)
+    };
+
+    let mut img = PixelBuffer::from_pixel(img_w, img_h, image::Rgba([0, 0, 0, 255]));
+
+    // Curve
+    let curve_pts: Vec<(i32, i32)> = data.curve.iter().map(|r| project(r[0], r[1])).collect();
+    draw_polyline(&mut img, &curve_pts, [0xff, 0xff, 0xff, 255], 1);
+
+    img
+}
+
+fn draw_polyline(img: &mut PixelBuffer, points: &[(i32, i32)], color: [u8; 4], thickness: i32) {
+    if points.len() < 2 {
+        return;
+    }
+    for window in points.windows(2) {
+        draw_line(img, window[0], window[1], color, thickness);
+    }
+}
+
+fn draw_line(img: &mut PixelBuffer, start: (i32, i32), end: (i32, i32), color: [u8; 4], thickness: i32) {
+    let (x0, y0) = start;
+    let (x1, y1) = end;
+    let dx = (x1 - x0).abs();
+    let dy = -(y1 - y0).abs();
+    let sx = if x0 < x1 { 1 } else { -1 };
+    let sy = if y0 < y1 { 1 } else { -1 };
+    let mut err = dx + dy;
+    let (mut x, mut y) = (x0, y0);
+
+    loop {
+        for dy_off in -(thickness / 2)..=(thickness / 2) {
+            for dx_off in -(thickness / 2)..=(thickness / 2) {
+                let px = x + dx_off;
+                let py = y + dy_off;
+                if px >= 0 && (px as u32) < img.width() && py >= 0 && (py as u32) < img.height() {
+                    img.put_pixel(px as u32, py as u32, image::Rgba(color));
+                }
+            }
+        }
+        if x == x1 && y == y1 {
+            break;
+        }
+        let e2 = 2 * err;
+        if e2 >= dy {
+            if x == x1 {
+                break;
+            }
+            err += dy;
+            x += sx;
+        }
+        if e2 <= dx {
+            if y == y1 {
+                break;
+            }
+            err += dx;
+            y += sy;
+        }
+    }
 }

@@ -58,12 +58,12 @@ impl TrackGenerator {
                 .position
                 .keys()
                 .fold(f64::NEG_INFINITY, |a, b| a.max(b.0));
-            let smin_r = (s_min / 100.0).floor() * 100.0 - boundary_margin;
-            let smax_r = (s_max / 100.0).ceil() * 100.0 + boundary_margin;
+            let smin_r = (s_min / 100.0).round() * 100.0 - boundary_margin;
+            let smax_r = (s_max / 100.0).round() * 100.0 + boundary_margin;
             add_equal_cp(&mut list_cp, smin_r.max(0.0), smax_r, equaldist_unit);
         } else {
-            let cmin_r = (cp_min / 100.0).floor() * 100.0 - boundary_margin;
-            let cmax_r = (cp_max / 100.0).ceil() * 100.0 + boundary_margin;
+            let cmin_r = (cp_min / 100.0).round() * 100.0 - boundary_margin;
+            let cmax_r = (cp_max / 100.0).round() * 100.0 + boundary_margin;
             add_equal_cp(&mut list_cp, cmin_r.max(0.0), cmax_r, equaldist_unit);
         }
 
@@ -512,10 +512,12 @@ fn add_equal_cp(list_cp: &mut Vec<f64>, min_val: f64, max_val: f64, step: f64) {
     {
         return;
     }
-    let mut d = min_val;
-    while d <= max_val + step * 0.5 {
-        list_cp.push(d);
-        d += step;
+    let n = ((max_val - min_val) / step).ceil() as i64;
+    for i in 0..n {
+        let d = min_val + (i as f64) * step;
+        if d < max_val + 1e-12 {
+            list_cp.push(d);
+        }
     }
 }
 
