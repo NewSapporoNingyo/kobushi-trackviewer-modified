@@ -286,13 +286,20 @@ impl MapPlot {
         pos.iter()
             .map(|row| {
                 let key = &self.environment.station.position[&StationDist(row[0])];
-                let name = self
+                let raw_name = self
                     .environment
                     .station
                     .stationkey
                     .get(key)
                     .cloned()
                     .unwrap_or_else(|| key.clone());
+                let name = raw_name
+                    .split(',')
+                    .nth(1)
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| raw_name.split(',').next().unwrap_or(&raw_name).trim())
+                    .to_string();
                 StationLabel {
                     distance: row[0],
                     mileage: row[0] - self.distance_origin,
@@ -360,7 +367,7 @@ impl MapPlot {
             let next_elem = &self.environment.own_track.data[n];
 
             if pointer.last.is_none() {
-                let start = owntrack[0][0];
+                let start = owntrack.first().map(|r| r[0]).unwrap_or(0.0);
                 let end = next_elem.distance;
                 let mid = (start + end) / 2.0;
                 if mid > dmin && mid < dmax {
@@ -436,7 +443,7 @@ impl MapPlot {
 
         // Final segment
         if pointer.last.is_some() && pointer.next.is_none() {
-            let end = owntrack[owntrack.len() - 1][0];
+            let end = owntrack.last().map(|r| r[0]).unwrap_or(0.0);
             if (end - dmin).abs() > 1e-9 {
                 let start = self.environment.own_track.data[pointer.last.unwrap()].distance;
                 let mid = (start + end) / 2.0;
@@ -705,7 +712,12 @@ impl MapPlot {
 
     pub fn get_track_info_at(&self, distance: f64) -> Option<TrackInfo> {
         let own = &self.environment.owntrack_pos;
-        if own.is_empty() || distance < own[0][0] || distance > own[own.len() - 1][0] {
+        if own.is_empty() {
+            return None;
+        }
+        let first_dist = own.first().map(|r| r[0]).unwrap_or(0.0);
+        let last_dist = own.last().map(|r| r[0]).unwrap_or(0.0);
+        if distance < first_dist || distance > last_dist {
             return None;
         }
         let idx = own.partition_point(|r| r[0] < distance).min(own.len() - 1);

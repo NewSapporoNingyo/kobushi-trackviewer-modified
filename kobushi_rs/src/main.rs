@@ -83,7 +83,7 @@ fn main() -> Result<(), eframe::Error> {
 
     let error_state: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
 
-    // Global panic hook: capture panic message for display in UI
+    // Global panic hook: capture panic message for display in UI + write to crash.log
     {
         let error_state = Arc::clone(&error_state);
         let default_hook = std::panic::take_hook();
@@ -102,8 +102,10 @@ fn main() -> Result<(), eframe::Error> {
             let full_msg = format!("PANIC: {}{}", msg, location);
             log::error!("{}", full_msg);
             if let Ok(mut guard) = error_state.lock() {
-                *guard = Some(full_msg);
+                *guard = Some(full_msg.clone());
             }
+            // Write crash log to file for diagnostics
+            let _ = std::fs::write("crash.log", &full_msg);
             default_hook(info);
         }));
     }

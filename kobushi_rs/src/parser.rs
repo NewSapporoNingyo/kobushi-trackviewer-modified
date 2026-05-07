@@ -154,7 +154,7 @@ fn set_distance(input: &str) -> IResult<&str, Statement> {
 }
 
 fn include_file(input: &str) -> IResult<&str, Statement> {
-    let (input, _) = alt((tag("Include"), tag("include")))(input)?;
+    let (input, _) = nom::bytes::complete::tag_no_case("include")(input)?;
     let (input, expr) = expression(input)?;
     let (input, _) = ws(char_p(';'))(input)?;
     Ok((input, Statement::Include(expr)))

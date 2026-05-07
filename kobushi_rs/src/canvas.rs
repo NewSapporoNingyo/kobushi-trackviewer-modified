@@ -94,7 +94,7 @@ impl CanvasState {
         self.measure_crosshair = false;
     }
 
-    fn scales(&self) -> (f64, f64) {
+    pub fn scales(&self) -> (f64, f64) {
         if self.independent_scale {
             (self.scale_x, self.scale_y)
         } else {
@@ -168,9 +168,10 @@ impl CanvasState {
         let s = self.rotation.sin();
         let wx = -(c * screen_dx / sx_scale + screen_y_sign * s * screen_dy / sy_scale);
         let wy = s * screen_dx / sx_scale - screen_y_sign * c * screen_dy / sy_scale;
-        self.center[0] += wx;
+        // Fix 1: invert direction so the view follows the mouse (match Python _pan)
+        self.center[0] -= wx;
         if !self.lock_y_center {
-            self.center[1] += wy;
+            self.center[1] -= wy;
         }
     }
 
@@ -275,7 +276,9 @@ impl CanvasPainter {
         let mut screen_pts: Vec<Pos2> = Vec::with_capacity(actual_end - actual_start);
         for i in actual_start..actual_end {
             let (sx, sy) = state.world_to_screen(points[i][0], points[i][1], width_f, height_f);
-            screen_pts.push(Pos2::new(sx as f32, sy as f32));
+            if sx.is_finite() && sy.is_finite() {
+                screen_pts.push(Pos2::new(sx as f32, sy as f32));
+            }
         }
 
         if screen_pts.len() >= 2 {
@@ -303,7 +306,6 @@ impl CanvasPainter {
         let font_id = FontId::proportional(font_size);
 
         if let Some(_ang) = angle {
-            // Use rotated text
             painter.text(pos, egui::Align2::LEFT_TOP, text, font_id, color);
         } else {
             painter.text(pos, egui::Align2::LEFT_TOP, text, font_id, color);
@@ -394,4 +396,41 @@ fn format_scalebar_label(length: f64) -> String {
     } else {
         format!("{:.1}m", length)
     }
+}
+
+pub fn compute_movable_grid(
+    canvas: &CanvasState,
+    rect: Rect,
+) -> Option<(f64, f64, f64)> {
+    // Computes (step, x_start, y_start) for movable grid lines
+    let width = rect.width() as f64;
+    let height = rect.height() as f64;
+
+    let corners = [
+        canvas.screen_to_world(rect.left() as f64, rect.top() as f64, width, height),
+        canvas.screen_to_world(rect.right() as f64, rect.top() as f64, width, height),
+        canvas.screen_to_world(rect.left() as f64, rect.bottom() as f64, width, height),
+        canvas.screen_to_world(rect.right() as f64, rect.bottom() as f64, width, height),
+    ];
+
+    let xmin = corners.iter().map(|p| p.0).fold(f64::INFINITY, f64::min);
+    let xmax = corners.iter().map(|p| p.0).fold(f64::NEG_INFINITY, f64::max);
+    let ymin = corners.iter().map(|p| p.1).fold(f64::INFINITY, f64::min);
+    let ymax = corners.iter().map(|p| p.1).fold(f64::NEG_INFINITY, f64::max);
+
+    let dx = xmax - xmin;
+    if dx <= 0.0 || !dx.is_finite() {
+        return None;
+    }
+
+    let order_of_mag = (dx / 5.0).log10().floor();
+    let step = 10_f64.powf(order_of_mag);
+    if step <= 0.0 || !step.is_finite() {
+        return None;
+    }
+
+    let x_start = (xmin / step).floor() * step;
+    let y_start = (ymin / step).floor() * step;
+
+    Some((step, x_start, y_start))
 }

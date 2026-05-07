@@ -262,14 +262,21 @@ impl App {
                     .position
                     .iter()
                     .map(|(d, k)| {
-                        let name = map_plot
+                        let raw_name = map_plot
                             .environment
                             .station
                             .stationkey
                             .get(k)
                             .cloned()
                             .unwrap_or_else(|| k.clone());
-                        (d.0, k.clone(), name)
+                        let display_name = raw_name
+                            .split(',')
+                            .nth(1)
+                            .map(|s| s.trim())
+                            .filter(|s| !s.is_empty())
+                            .unwrap_or_else(|| raw_name.split(',').next().unwrap_or(&raw_name).trim())
+                            .to_string();
+                        (d.0, k.clone(), display_name)
                     })
                     .collect();
                 stn_list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
@@ -289,14 +296,14 @@ impl App {
                         .position
                         .keys()
                         .fold(f64::NEG_INFINITY, |a, b| a.max(b.0));
-                    self.distrange_min = (s_min / 100.0).floor() * 100.0 - 500.0;
-                    self.distrange_max = (s_max / 100.0).ceil() * 100.0 + 500.0;
+                    self.distrange_min = (s_min / 100.0).round() * 100.0 - 500.0;
+                    self.distrange_max = (s_max / 100.0).round() * 100.0 + 500.0;
                 } else {
                     let cp = &map_plot.environment.controlpoints.list_cp;
                     let cp_min = cp.iter().fold(f64::INFINITY, |a, &b| a.min(b));
                     let cp_max = cp.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
-                    self.distrange_min = (cp_min / 100.0).floor() * 100.0 - 500.0;
-                    self.distrange_max = (cp_max / 100.0).ceil() * 100.0 + 500.0;
+                    self.distrange_min = (cp_min / 100.0).round() * 100.0 - 500.0;
+                    self.distrange_max = (cp_max / 100.0).round() * 100.0 + 500.0;
                 }
                 self.dmin = Some(self.distrange_min);
                 self.dmax = Some(self.distrange_max);
@@ -690,8 +697,6 @@ impl eframe::App for App {
                 self.map_plot = Some(map_plot);
             }
         });
-
-        ctx.request_repaint();
     }
 }
 
@@ -857,40 +862,38 @@ impl App {
             CanvasPainter::draw_scalebar(painter, &canvas, rect);
         }
 
-        // Measure crosshair
-        if canvas.measure_crosshair {
-            if let Some(dist) = canvas.measure_pos {
-                if view_type == ViewType::Plane {
-                    let own = &map_plot.environment.owntrack_pos;
-                    if !own.is_empty() {
-                        let idx = own.partition_point(|r| r[0] < dist).min(own.len() - 1);
-                        let (sx, sy) =
-                            canvas.world_to_screen(own[idx][1], own[idx][2], width, height);
-                        painter.line_segment(
-                            [
-                                Pos2::new(sx as f32 - 12.0, sy as f32 - 12.0),
-                                Pos2::new(sx as f32 + 12.0, sy as f32 + 12.0),
-                            ],
-                            Stroke::new(2.0, Color32::from_rgb(0xff, 0x33, 0x33)),
-                        );
-                        painter.line_segment(
-                            [
-                                Pos2::new(sx as f32 - 12.0, sy as f32 + 12.0),
-                                Pos2::new(sx as f32 + 12.0, sy as f32 - 12.0),
-                            ],
-                            Stroke::new(2.0, Color32::from_rgb(0xff, 0x33, 0x33)),
-                        );
-                    }
-                } else {
-                    let (sx, _) = canvas.world_to_screen(dist, 0.0, width, height);
+        // Measure crosshair — driven by app-level measure_distance, synced across all 3 canvases
+        if let Some(dist) = self.measure_distance {
+            if view_type == ViewType::Plane {
+                let own = &map_plot.environment.owntrack_pos;
+                if !own.is_empty() {
+                    let idx = own.partition_point(|r| r[0] < dist).min(own.len() - 1);
+                    let (sx, sy) =
+                        canvas.world_to_screen(own[idx][1], own[idx][2], width, height);
                     painter.line_segment(
                         [
-                            Pos2::new(sx as f32, rect.top()),
-                            Pos2::new(sx as f32, rect.bottom()),
+                            Pos2::new(sx as f32 - 12.0, sy as f32 - 12.0),
+                            Pos2::new(sx as f32 + 12.0, sy as f32 + 12.0),
                         ],
-                        Stroke::new(1.0, Color32::from_rgb(0xff, 0x33, 0x33)),
+                        Stroke::new(2.0, Color32::from_rgb(0xff, 0x33, 0x33)),
+                    );
+                    painter.line_segment(
+                        [
+                            Pos2::new(sx as f32 - 12.0, sy as f32 + 12.0),
+                            Pos2::new(sx as f32 + 12.0, sy as f32 - 12.0),
+                        ],
+                        Stroke::new(2.0, Color32::from_rgb(0xff, 0x33, 0x33)),
                     );
                 }
+            } else {
+                let (sx, _) = canvas.world_to_screen(dist, 0.0, width, height);
+                painter.line_segment(
+                    [
+                        Pos2::new(sx as f32, rect.top()),
+                        Pos2::new(sx as f32, rect.bottom()),
+                    ],
+                    Stroke::new(1.0, Color32::from_rgb(0xff, 0x33, 0x33)),
+                );
             }
         }
 
@@ -927,29 +930,19 @@ impl App {
         }
 
         // Drag to pan
-        if response.dragged() {
+        if response.dragged_by(egui::PointerButton::Primary) {
             let delta = response.drag_delta();
             canvas.pan(-delta.x as f64, -delta.y as f64, width, height);
+            response.ctx.request_repaint();
             return true;
         }
 
-        // Right-click rotate (plane only)
-        if view_type == ViewType::Plane && response.hovered() {
-            if response
-                .ctx
-                .input(|i| i.pointer.button_down(egui::PointerButton::Secondary))
-            {
-                if let Some(pos) = response.hover_pos() {
-                    if let Some(prev) = canvas_prev_pos(&response.ctx) {
-                        let dx = pos.x - prev.x;
-                        let dy = pos.y - prev.y;
-                        if dx.abs() > 0.5 || dy.abs() > 0.5 {
-                            canvas.rotate(dx as f64 * 0.01);
-                        }
-                    }
-                    set_canvas_prev_pos(&response.ctx, pos);
-                }
-            }
+        // Right-click drag to rotate (plane only)
+        if view_type == ViewType::Plane && response.dragged_by(egui::PointerButton::Secondary) {
+            let delta = response.drag_delta();
+            canvas.rotate(-delta.x as f64 * 0.01);
+            response.ctx.request_repaint();
+            return true;
         }
 
         // Double-click to fit
@@ -1007,7 +1000,9 @@ impl App {
                     }
                 }
                 ViewType::Profile | ViewType::Radius => {
-                    if wx >= own[0][0] && wx <= own[own.len() - 1][0] {
+                    let first = own.first().map(|r| r[0]).unwrap_or(0.0);
+                    let last = own.last().map(|r| r[0]).unwrap_or(0.0);
+                    if wx >= first && wx <= last {
                         Some(wx)
                     } else {
                         None
@@ -1059,6 +1054,10 @@ impl App {
     }
 
     fn draw_grid(&self, painter: &Painter, canvas: &CanvasState, rect: Rect) {
+        let width = rect.width() as f64;
+        let height = rect.height() as f64;
+        let font_id = FontId::proportional(10.0);
+
         if canvas.grid_mode == "fixed" {
             let spacing = 80.0;
             let mut x = rect.left() as f64;
@@ -1082,6 +1081,51 @@ impl App {
                     Stroke::new(1.0, canvas.grid_color),
                 );
                 y += spacing;
+            }
+        } else if canvas.grid_mode == "movable" {
+            if let Some((step, x_start, y_start)) = compute_movable_grid(canvas, rect) {
+                let mut wx = x_start;
+                while wx <= x_start + (width / canvas.scales().0) + step * 2.0 {
+                    let (sx, _) = canvas.world_to_screen(wx, 0.0, width, height);
+                    if sx >= rect.left() as f64 - 10.0 && sx <= rect.right() as f64 + 10.0 {
+                        painter.line_segment(
+                            [
+                                Pos2::new(sx as f32, rect.top()),
+                                Pos2::new(sx as f32, rect.bottom()),
+                            ],
+                            Stroke::new(1.0, canvas.grid_color),
+                        );
+                        painter.text(
+                            Pos2::new(sx as f32 + 2.0, rect.bottom() - 4.0),
+                            egui::Align2::LEFT_BOTTOM,
+                            format_grid_label(wx),
+                            font_id.clone(),
+                            canvas.text_color,
+                        );
+                    }
+                    wx += step;
+                }
+                let mut wy = y_start;
+                while wy <= y_start + (height / canvas.scales().1) + step * 2.0 {
+                    let (_, sy) = canvas.world_to_screen(0.0, wy, width, height);
+                    if sy >= rect.top() as f64 - 10.0 && sy <= rect.bottom() as f64 + 10.0 {
+                        painter.line_segment(
+                            [
+                                Pos2::new(rect.left(), sy as f32),
+                                Pos2::new(rect.right(), sy as f32),
+                            ],
+                            Stroke::new(1.0, canvas.grid_color),
+                        );
+                        painter.text(
+                            Pos2::new(rect.left() + 2.0, sy as f32 - 2.0),
+                            egui::Align2::LEFT_BOTTOM,
+                            format_grid_label(wy),
+                            font_id.clone(),
+                            canvas.text_color,
+                        );
+                    }
+                    wy += step;
+                }
             }
         }
     }
@@ -1606,21 +1650,23 @@ impl App {
     }
 }
 
-// Helper to track previous hover position for rotation
-thread_local! {
-    static PREV_CANVAS_POS: std::cell::RefCell<Option<Pos2>> = std::cell::RefCell::new(None);
-}
-
-fn canvas_prev_pos(_ctx: &egui::Context) -> Option<Pos2> {
-    PREV_CANVAS_POS.with(|c| *c.borrow())
-}
-
-fn set_canvas_prev_pos(_ctx: &egui::Context, pos: Pos2) {
-    PREV_CANVAS_POS.with(|c| *c.borrow_mut() = Some(pos));
-}
-
 fn color_to_hex(color: Color32) -> String {
     format!("#{:02x}{:02x}{:02x}", color.r(), color.g(), color.b())
+}
+
+fn format_grid_label(value: f64) -> String {
+    if value.abs() >= 1000.0 {
+        let km = value / 1000.0;
+        if (km - km.round()).abs() < 1e-9 {
+            format!("{:.0}k", km)
+        } else {
+            format!("{:.1}k", km)
+        }
+    } else if (value - value.round()).abs() < 1e-9 {
+        format!("{:.0}", value)
+    } else {
+        format!("{:.1}", value)
+    }
 }
 
 fn write_owntrack_csv(path: &std::path::Path, data: &[[f64; 11]]) -> std::io::Result<()> {

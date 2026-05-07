@@ -462,7 +462,10 @@ impl TrackGenerator {
     pub fn generate_curveradius_dist(&self) -> Vec<[f64; 2]> {
         let data = &self.env.own_track.data;
         let mut radius_p = TrackPointer::new(data, "radius");
-        let mut result = vec![[self.list_cp[0], 0.0]];
+        let mut result = Vec::new();
+        if !self.list_cp.is_empty() {
+            result.push([self.list_cp[0], 0.0]);
+        }
         let mut prev_radius = 0.0f64;
         let mut prev_is_bt = false;
 
@@ -472,18 +475,21 @@ impl TrackGenerator {
             let flag = &next_radius.flag;
             let distance = next_radius.distance;
 
+            let val = next_radius.value.as_value();
+            let safe_val = if val.is_finite() { val } else { 0.0 };
+
             if next_radius.value.is_continue() {
                 result.push([distance, prev_radius]);
             } else if prev_is_bt {
-                result.push([distance, next_radius.value.as_value()]);
+                result.push([distance, safe_val]);
             } else if flag == "i" {
-                result.push([distance, next_radius.value.as_value()]);
+                result.push([distance, safe_val]);
             } else {
                 result.push([distance, prev_radius]);
-                result.push([distance, next_radius.value.as_value()]);
+                result.push([distance, safe_val]);
             }
 
-            prev_radius = next_radius.value.as_value();
+            prev_radius = safe_val;
             prev_is_bt = flag == "bt";
             radius_p.seek_next(data);
         }
