@@ -17,6 +17,7 @@
 '''
 '''
 
+import math
 import numpy as np
 from . import trackcoordinate as tc
 
@@ -85,20 +86,7 @@ class TrackGenerator():
         self.radius_lastpos['radius']   = self.last_pos['radius']
         
         #座標情報を格納するリスト
-        self.result = []
-        '''
-        self.result = [[self.last_pos['distance'],\
-                        self.last_pos['x'],\
-                        self.last_pos['y'],\
-                        self.last_pos['z'],\
-                        self.last_pos['theta'],\
-                        self.last_pos['radius'],\
-                        self.last_pos['gradient'],\
-                        1,\
-                        self.last_pos['cant'],\
-                        self.last_pos['center'],\
-                        self.last_pos['gauge']]]
-        '''
+        self.result = np.zeros((len(self.list_cp), 11), dtype=np.float64)
         
         #縦断面図曲線半径情報を格納するリスト
         self.radius_dist = []
@@ -132,7 +120,7 @@ class TrackGenerator():
         #import pdb
         #pdb.set_trace()
         
-        for dist in self.list_cp:
+        for i, dist in enumerate(self.list_cp):
             # curve.setfunction に対する処理
             while (interpolate_p.onNextpoint(dist)): #注目している要素区間の終端に到達？
                 self.last_pos['interpolate_func'] = self.data_ownt[interpolate_p.pointer['next']]['value']
@@ -351,19 +339,19 @@ class TrackGenerator():
                     self.last_pos['center'],\
                     self.last_pos['gauge']])
             '''
-            self.result.append([dist,\
-                self.last_pos['x'],\
-                self.last_pos['y'],\
-                self.last_pos['z'],\
-                self.last_pos['theta'],\
-                self.last_pos['radius'],\
-                self.last_pos['gradient'],\
-                0 if self.last_pos['interpolate_func'] == 'sin' else 1,\
-                self.last_pos['cant'],\
-                self.last_pos['center'],\
-                self.last_pos['gauge']])
+            self.result[i] = [dist,
+                self.last_pos['x'],
+                self.last_pos['y'],
+                self.last_pos['z'],
+                self.last_pos['theta'],
+                self.last_pos['radius'],
+                self.last_pos['gradient'],
+                0 if self.last_pos['interpolate_func'] == 'sin' else 1,
+                self.last_pos['cant'],
+                self.last_pos['center'],
+                self.last_pos['gauge']]
             
-        return np.array(self.result)
+        return self.result
     def generate_curveradius_dist(self):
         radius_p = TrackPointer(self.env,'radius')
         
@@ -479,7 +467,6 @@ class OtherTrackGenerator():
         self.trackkey = trackkey
         self.data = self.env.othertrack.data[trackkey]
         self.owntrack_position = self.env.owntrack_pos
-        self.result = []
         self.distrange={'min':min(self.data, key=lambda x: x['distance'])['distance'], 'max':max(self.data, key=lambda x: x['distance'])['distance']}
         # 前回処理した地点の情報
         self.pos = {'last':{}, 'next':{}}
@@ -498,6 +485,10 @@ class OtherTrackGenerator():
             
         track_gen = tc.OtherTrack() # 座標計算オブジェクト
         cant_gen  = tc.Cant(trackptr['cant'], self.data, self.pos['last']) # カント計算オブジェクト
+        
+        num_owntrack = len(self.owntrack_position)
+        self.result = np.zeros((num_owntrack, 8), dtype=np.float64)
+        result_idx = 0
         
         #tp_keys = ['x.position','x.radius','y.position','y.radius']
         #skip_dimension = {'x.position':False, 'x.radius':False, 'y.position':False, 'y.radius':False}
@@ -538,7 +529,9 @@ class OtherTrackGenerator():
                                                                 element[0] - self.pos['last']['x.distance'],\
                                                                 element)
             else:
-                temp_result_X = np.dot(track_gen.rotate(element[4]), np.array([0,self.pos['last']['x.position']])) + np.array([element[1],element[2]])
+                theta = element[4]
+                x_pos = self.pos['last']['x.position']
+                temp_result_X = [-math.sin(theta) * x_pos + element[1], math.cos(theta) * x_pos + element[2]]
             if trackptr['y.position'].pointer['last'] != None and trackptr['y.position'].pointer['next'] != None:
                 for k in ['last','next']:
                     self.pos[k]['y.distance'] = self.data[trackptr['y.position'].pointer[k]]['distance']
@@ -554,12 +547,13 @@ class OtherTrackGenerator():
                 
             temp_result_cant = cant_gen.process(element[0], self.pos['last']['interpolate_func'])
             
-            self.result.append([element[0],\
-                                temp_result_X[0],\
-                                temp_result_X[1],\
-                                temp_result_Y[1],\
-                                0 if self.pos['last']['interpolate_func'] == 'sin' else 1,\
-                                temp_result_cant,\
-                                self.pos['last']['center'],\
-                                self.pos['last']['gauge']])
-        return np.array(self.result)
+            self.result[result_idx] = [element[0],
+                                temp_result_X[0],
+                                temp_result_X[1],
+                                temp_result_Y[1],
+                                0 if self.pos['last']['interpolate_func'] == 'sin' else 1,
+                                temp_result_cant,
+                                self.pos['last']['center'],
+                                self.pos['last']['gauge']]
+            result_idx += 1
+        return self.result[:result_idx]

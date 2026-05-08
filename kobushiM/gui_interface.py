@@ -16,6 +16,8 @@
 import sys
 import pathlib
 import os
+import time
+import queue
 import webbrowser
 import argparse
 
@@ -56,6 +58,31 @@ class Catcher: # tkinter内で起きた例外をキャッチする
                 print(e) # 通常モードならダイアログ表示
                 tk.messagebox.showinfo(message=e)
 
+class LogInterceptor:
+    def __init__(self, original, source, log_queue):
+        self.original = original
+        self.source = source
+        self.queue = log_queue
+
+    def write(self, msg):
+        if msg:
+            if self.original is not None and hasattr(self.original, 'write'):
+                try:
+                    self.original.write(msg)
+                except Exception:
+                    pass
+            
+            stripped = msg.rstrip('\n\r')
+            if stripped:
+                self.queue.put((self.source, stripped))
+
+    def flush(self):
+        if self.original is not None and hasattr(self.original, 'flush'):
+            try:
+                self.original.flush()
+            except Exception:
+                pass
+
 class mainwindow(ttk.Frame):
     def __init__(self, master, parser, stepdist = 25, font = ''):
         self.dmin = None
@@ -84,8 +111,15 @@ class mainwindow(ttk.Frame):
         self.parser = parser
         self._measure_marker_ids = {}
 
+        self._log_queue = queue.Queue()
+        self._log_errors = []
+        self._log_warnings = []
+        sys.stdout = LogInterceptor(sys.stdout, 'stdout', self._log_queue)
+        sys.stderr = LogInterceptor(sys.stderr, 'stderr', self._log_queue)
+
         i18n.on_language_change(self.refresh_ui_text)
         self.refresh_ui_text()
+        self.after(100, self.check_log_queue)
 
     def refresh_ui_text(self):
         self.master.title(i18n.get('app.title', version=__version__))
@@ -170,7 +204,7 @@ class mainwindow(ttk.Frame):
         self.aux_val_label = ttk.Label(self.aux_values_control, text=i18n.get('frame.aux_info'), font = font_title)
         self.aux_val_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
         self.stationpos_val = tk.BooleanVar(value=True)
-        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_pos'),onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.plot_all)
+        self.stationpos_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_pos'),onvalue=True, offvalue=False, variable=self.stationpos_val, command=self.on_stationpos_toggle)
         self.stationpos_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
         self.stationlabel_val = tk.BooleanVar(value=True)
         self.stationlabel_chk = ttk.Checkbutton(self.aux_values_control, text=i18n.get('chk.station_name'),onvalue=True, offvalue=False, variable=self.stationlabel_val, command=self.plot_all)
@@ -203,7 +237,7 @@ class mainwindow(ttk.Frame):
             command=self.update_pane_layout)
         self.show_gradient_graph_chk.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
         self.gradientpos_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_pos'),
-            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.plot_all)
+            onvalue=True, offvalue=False, variable=self.gradientpos_val, command=self.on_gradientpos_toggle)
         self.gradientpos_chk.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
         self.gradientval_chk = ttk.Checkbutton(self.graph_control, text=i18n.get('chk.gradient_val'),
             onvalue=True, offvalue=False, variable=self.gradientval_val, command=self.plot_all)
@@ -251,6 +285,14 @@ class mainwindow(ttk.Frame):
         self.filedir_entry_val = tk.StringVar()
         self.filedir_entry = ttk.Entry(self.file_frame, width=75, textvariable=self.filedir_entry_val)
         self.filedir_entry.grid(column=1, row=0, sticky=(tk.W, tk.E))
+        self._log_err_btn = ttk.Button(self.file_frame, text='🐛 0', width=7, command=self._show_error_details)
+        self._log_err_btn.grid(column=2, row=0, sticky=(tk.W), padx=(2, 0))
+        self._log_warn_btn = ttk.Button(self.file_frame, text='⚠ 0', width=7, command=self._show_warning_details)
+        self._log_warn_btn.grid(column=3, row=0, sticky=(tk.W), padx=(2, 0))
+        self._log_last_msg = tk.StringVar(value='')
+        self._log_last_label = ttk.Label(self.file_frame, textvariable=self._log_last_msg, width=50, anchor=tk.W, relief=tk.SUNKEN, padding=(4, 1))
+        self._log_last_label.grid(column=4, row=0, sticky=(tk.W, tk.E), padx=(4, 0))
+        self.file_frame.columnconfigure(4, weight=1)
         
         self.setdist_frame = ttk.Frame(self, padding='3 3 3 3')
         self.setdist_frame.grid(column=0, row=2, sticky=(tk.S, tk.W, tk.E))
@@ -337,6 +379,73 @@ class mainwindow(ttk.Frame):
 
         self.master.update_idletasks()
         self.plot_all()
+    def on_stationpos_toggle(self):
+        if self.stationpos_val.get():
+            self.stationlabel_chk.config(state='normal')
+            self.stationmileage_chk.config(state='normal')
+        else:
+            self.stationlabel_chk.config(state='disabled')
+            self.stationmileage_chk.config(state='disabled')
+        self.plot_all()
+    def on_gradientpos_toggle(self):
+        if self.gradientpos_val.get():
+            self.gradientval_chk.config(state='normal')
+        else:
+            self.gradientval_chk.config(state='disabled')
+        self.plot_all()
+    def check_log_queue(self):
+        try:
+            while True:
+                source, msg = self._log_queue.get_nowait()
+                if source == 'stderr' or 'error' in msg.lower():
+                    self._log_errors.append(msg)
+                elif 'warning' in msg.lower():
+                    self._log_warnings.append(msg)
+                self._log_last_msg.set(msg[-100:])
+        except queue.Empty:
+            pass
+        wc = len(self._log_warnings)
+        ec = len(self._log_errors)
+        if wc > 0:
+            self._log_warn_btn.config(text='⚠ {:d}'.format(wc))
+        if ec > 0:
+            self._log_err_btn.config(text='🐛 {:d}'.format(ec))
+        self.after(100, self.check_log_queue)
+
+    def _clear_logs(self):
+        self._log_errors.clear()
+        self._log_warnings.clear()
+        self._log_last_msg.set('')
+        self._log_err_btn.config(text='🐛 0')
+        self._log_warn_btn.config(text='⚠ 0')
+
+    def _show_error_details(self):
+        self._show_log_detail_window('Errors', self._log_errors)
+
+    def _show_warning_details(self):
+        self._show_log_detail_window('Warnings', self._log_warnings)
+
+    def _show_log_detail_window(self, title, messages):
+        win = tk.Toplevel(self)
+        win.title(title)
+        win.geometry('700x400')
+        win.transient(self)
+        frame = ttk.Frame(win, padding='3 3 3 3')
+        frame.pack(fill=tk.BOTH, expand=True)
+        text = tk.Text(frame, wrap=tk.WORD, font=('Consolas', 9))
+        scroll = ttk.Scrollbar(frame, command=text.yview)
+        text.configure(yscrollcommand=scroll.set)
+        text.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        frame.columnconfigure(0, weight=1)
+        frame.rowconfigure(0, weight=1)
+        if messages:
+            for msg in messages:
+                text.insert(tk.END, msg + '\n')
+        else:
+            text.insert(tk.END, 'No messages')
+        text.config(state=tk.DISABLED)
+
     def on_grid_mode_change(self):
         self.plane_canvas.set_grid_mode(self.grid_mode_val.get())
     def on_mode_change(self):
@@ -348,10 +457,16 @@ class mainwindow(ttk.Frame):
             self.plane_canvas.canvas.bind('<Motion>', self.on_plan_motion)
             self.profile_canvas.canvas.bind('<Motion>', self.on_profile_motion)
             self.radius_canvas.canvas.bind('<Motion>', self.on_radius_motion)
+            for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+                cv.canvas.unbind('<Double-Button-1>')
+                cv.canvas.bind('<Double-Button-1>', self.on_measure_double_click)
         else:
             self.plane_canvas.canvas.unbind('<Motion>')
             self.profile_canvas.canvas.unbind('<Motion>')
             self.radius_canvas.canvas.unbind('<Motion>')
+            for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+                cv.canvas.unbind('<Double-Button-1>')
+                cv.canvas.bind('<Double-Button-1>', cv.fit)
             self.plane_canvas.set_cursor('')
             self.profile_canvas.set_cursor('')
             self.radius_canvas.set_cursor('')
@@ -447,6 +562,30 @@ class mainwindow(ttk.Frame):
         self.measure_pos = {'distance': wx}
         self._sync_measure_markers(wx)
         self.update_measure_info()
+    def on_measure_double_click(self, event):
+        if self.measure_pos is None or self.result is None:
+            return 'break'
+        distance = self.measure_pos['distance']
+        own = self.result.owntrack_pos
+        if len(own) == 0 or distance < own[0][0] or distance > own[-1][0]:
+            return 'break'
+        idx = np.searchsorted(own[:, 0], distance)
+        if idx >= len(own):
+            idx = len(own) - 1
+        clicked = event.widget
+        for cv in [self.plane_canvas, self.profile_canvas, self.radius_canvas]:
+            if cv.canvas is clicked:
+                continue
+            if cv is self.plane_canvas:
+                x, y = own[idx][1], own[idx][2]
+                angle = self.mplot.origin_angle
+                c, s = np.cos(-angle), np.sin(-angle)
+                cv.center = [float(c * x - s * y), float(s * x + c * y)]
+            else:
+                cv.center[0] = distance
+            cv.redraw()
+        self._sync_measure_markers(distance)
+        return 'break'
     def update_measure_info(self):
         if self.measure_pos is None or self.mplot is None:
             self.measure_info_label.config(text='')
@@ -507,6 +646,8 @@ class mainwindow(ttk.Frame):
         if inputdir != '':
             self.filedir_entry_val.set(inputdir)
             
+            self._clear_logs()
+            t_start = time.perf_counter()
             interpreter = interp.ParseMap(None,self.parser)
             self.result = interpreter.load_files(inputdir)
             
@@ -549,6 +690,8 @@ class mainwindow(ttk.Frame):
             
             self.mplot = mapplot.Mapplot(self.result, unitdist_default=self.default_track_interval)
             self.setdist_all()
+            t_end = time.perf_counter()
+            print('Map loaded in {:.2f}s'.format(t_end - t_start))
             
             self.print_debugdata()
     def reload_map(self, event=None):
@@ -560,6 +703,8 @@ class mainwindow(ttk.Frame):
             tmp_othertrack_linecolor = self.result.othertrack_linecolor
             tmp_othertrack_cprange   = self.result.othertrack.cp_range
             
+            self._clear_logs()
+            t_start = time.perf_counter()
             interpreter = interp.ParseMap(None,self.parser)
             self.result = interpreter.load_files(inputdir)
             
@@ -610,6 +755,8 @@ class mainwindow(ttk.Frame):
             self.mplot = mapplot.Mapplot(self.result,cp_arbdistribution = tmp_cp_arbdistribution)
             self.plot_all(keep_view=True)
             self.set_view_state(view_state)
+            t_end = time.perf_counter()
+            print('Map loaded in {:.2f}s'.format(t_end - t_start))
             
             self.print_debugdata()
     def draw_planerplot(self):
@@ -715,19 +862,20 @@ class mainwindow(ttk.Frame):
             canvas = view.canvas
             height = max(1, canvas.winfo_height())
 
-            for station in data['stations']:
-                x = station['point'][0]
-                z = station['point'][3]
-                screen_x, screen_z = view.world_to_screen(x, z)
-                canvas.create_line(screen_x, screen_z, screen_x, -100, fill='#ffffff', width=1)
-                view.point(x, z, radius=3)
-                if self.stationlabel_val.get():
-                    view.text(x, z, station['name'], offset=(8, -26), font_size=9)
-                if self.stationmileage_val.get():
-                    screen_x, _ = view.world_to_screen(x, 0)
-                    canvas.create_text(screen_x + 8, 8, anchor='nw',
-                        text=self.format_mileage(station['mileage']),
-                        fill='#ffd84d', font=(view.font_family, 8), tags=('fixed_y',))
+            if self.stationpos_val.get():
+                for station in data['stations']:
+                    x = station['point'][0]
+                    z = station['point'][3]
+                    screen_x, screen_z = view.world_to_screen(x, z)
+                    canvas.create_line(screen_x, screen_z, screen_x, -100, fill='#ffffff', width=1)
+                    view.point(x, z, radius=3)
+                    if self.stationlabel_val.get():
+                        view.text(x, z, station['name'], offset=(8, -26), font_size=9)
+                    if self.stationmileage_val.get():
+                        screen_x, _ = view.world_to_screen(x, 0)
+                        canvas.create_text(screen_x + 8, 8, anchor='nw',
+                            text=self.format_mileage(station['mileage']),
+                            fill='#ffd84d', font=(view.font_family, 8), tags=('fixed_y',))
             if self.gradientpos_val.get():
                 for point in data['gradient_points']:
                     screen_x, screen_z = view.world_to_screen(point['x'], point['z'])
@@ -815,7 +963,7 @@ class mainwindow(ttk.Frame):
         self.plane_canvas.set_view_state(state['plane'])
         self.profile_canvas.set_view_state(state['profile'])
         self.radius_canvas.set_view_state(state['radius'])
-    def plot_all(self, keep_view=False):
+    def plot_all(self, keep_view=True):
         if(self.result != None):
             self._clear_measure_marker()
             self.keep_view_on_next_draw = keep_view
