@@ -202,6 +202,12 @@ class mainwindow(ttk.Frame):
             self.subwindow.refresh_ui_text()
         if hasattr(self, 'fontctrl'):
             self.fontctrl.refresh_ui_text()
+        if hasattr(self, 'bgimg_label'):
+            self.bgimg_label.config(text=i18n.get('frame.bgimage'))
+        if hasattr(self, 'bgimg_import_btn'):
+            self.bgimg_import_btn.config(text=i18n.get('button.import_bg'))
+        if hasattr(self, 'bgimg_adjust_btn'):
+            self.bgimg_adjust_btn.config(text=i18n.get('button.adjust_bg'))
         if self.result is not None:
             self.plot_all()
 
@@ -356,13 +362,13 @@ class mainwindow(ttk.Frame):
         self.bgimg_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
         self.bgimg_control.grid(column=0, row=10, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
 
-        self.bgimg_label = ttk.Label(self.bgimg_control, text="背景图片", font=font_title)
+        self.bgimg_label = ttk.Label(self.bgimg_control, text=i18n.get('frame.bgimage'), font=font_title)
         self.bgimg_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
 
-        self.bgimg_import_btn = ttk.Button(self.bgimg_control, text="导入", command=self.import_bgimg)
+        self.bgimg_import_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.import_bg'), command=self.import_bgimg)
         self.bgimg_import_btn.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
 
-        self.bgimg_adjust_btn = ttk.Button(self.bgimg_control, text="调整", command=self.adjust_bgimg, state=tk.DISABLED)
+        self.bgimg_adjust_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.adjust_bg'), command=self.adjust_bgimg, state=tk.DISABLED)
         self.bgimg_adjust_btn.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
@@ -807,7 +813,8 @@ class mainwindow(ttk.Frame):
                         rotated_img = resized_img.rotate(total_rot_ccw, expand=True)
 
                         self.bg_image_tk = ImageTk.PhotoImage(rotated_img)
-                        view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER)
+                        img_id = view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER, tags=('bgimage',))
+                        view.canvas.tag_lower(img_id)
                     except Exception:
                         pass
 
@@ -1117,7 +1124,7 @@ class mainwindow(ttk.Frame):
         try:
             self.bg_image_original = Image.open(filepath)
         except Exception as e:
-            tk.messagebox.showerror(message=f"无法加载图片: {e}")
+            tk.messagebox.showerror(message=i18n.get('dialog.bgimg_load_error', error=str(e)))
             return
 
         start_x, start_y = 0.0, 0.0
@@ -1141,9 +1148,8 @@ class mainwindow(ttk.Frame):
             return
 
         dialog = tk.Toplevel(self.master)
-        dialog.title("调整背景图片")
+        dialog.title(i18n.get('dialog.adjust_bgimg'))
         dialog.transient(self.master)
-        dialog.grab_set()
 
         frame = ttk.Frame(dialog, padding='10 10 10 10')
         frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
@@ -1155,11 +1161,11 @@ class mainwindow(ttk.Frame):
         var_rotation = tk.DoubleVar(value=self.bg_image_params['rotation'])
 
         fields = [
-            ("X (m)", var_x),
-            ("Y (m)", var_y),
-            ("宽度 (m)", var_width),
-            ("高度 (m)", var_height),
-            ("旋转角度 (°)", var_rotation),
+            (i18n.get('label.bgimg_x'), var_x),
+            (i18n.get('label.bgimg_y'), var_y),
+            (i18n.get('label.bgimg_width'), var_width),
+            (i18n.get('label.bgimg_height'), var_height),
+            (i18n.get('label.bgimg_rotation'), var_rotation),
         ]
 
         for i, (label_text, var) in enumerate(fields):
@@ -1177,16 +1183,16 @@ class mainwindow(ttk.Frame):
                 if hasattr(self, 'plane_canvas'):
                     self.plane_canvas.redraw()
             except ValueError:
-                tk.messagebox.showerror(message="输入值无效，请输入数字", parent=dialog)
+                tk.messagebox.showerror(message=i18n.get('dialog.invalid_number'), parent=dialog)
 
         btn_frame = ttk.Frame(frame)
         btn_frame.grid(column=0, row=len(fields), columnspan=2, pady=(10, 0))
 
-        ttk.Button(btn_frame, text="确定", command=on_ok).grid(column=0, row=0, padx=(0, 8))
-        ttk.Button(btn_frame, text="取消", command=dialog.destroy).grid(column=1, row=0)
+        ttk.Button(btn_frame, text=i18n.get('button.ok'), command=on_ok).grid(column=0, row=0, padx=(0, 8))
+        ttk.Button(btn_frame, text=i18n.get('button.cancel'), command=dialog.destroy).grid(column=1, row=0)
 
         ttk.Separator(frame, orient='horizontal').grid(column=0, row=len(fields)+1, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
-        ttk.Button(frame, text="对齐到车站", command=lambda: self._align_to_station_dialog(dialog)).grid(column=0, row=len(fields)+2, columnspan=2, pady=(8, 0))
+        ttk.Button(frame, text=i18n.get('button.align_to_station'), command=lambda: self._align_to_station_dialog(dialog)).grid(column=0, row=len(fields)+2, columnspan=2, pady=(8, 0))
 
         dialog.columnconfigure(0, weight=1)
         dialog.rowconfigure(0, weight=1)
@@ -1212,16 +1218,14 @@ class mainwindow(ttk.Frame):
         self._align_dialog = dialog
         self._align_pick_btn1 = btn1
         self._align_pick_btn2 = btn2
+        self._align_pick_active = True
 
-        dialog.grab_release()
         dialog.withdraw()
 
         self.plane_canvas.set_cursor('crosshair')
-        self.plane_canvas.interactive = False
-        self._align_pick_binding = self.plane_canvas.canvas.bind(
-            '<Button-1>', lambda e: self._on_align_canvas_click(e), add='+')
+        self.plane_canvas.canvas.bind('<Double-Button-1>', lambda e: self._on_align_canvas_dblclick(e))
 
-    def _on_align_canvas_click(self, event):
+    def _on_align_canvas_dblclick(self, event):
         wx, wy = self.plane_canvas.screen_to_world(event.x, event.y)
 
         self._cleanup_align_pick()
@@ -1229,31 +1233,28 @@ class mainwindow(ttk.Frame):
         slot = self._align_pick_slot
         if slot == 1:
             self._align_pick1 = (wx, wy)
-            self._align_pick_btn1.config(text="选择背景上的点 (OK)")
+            self._align_pick_btn1.config(text=i18n.get('button.pick_on_bg_ok'))
         else:
             self._align_pick2 = (wx, wy)
-            self._align_pick_btn2.config(text="选择背景上的点 (OK)")
+            self._align_pick_btn2.config(text=i18n.get('button.pick_on_bg_ok'))
 
         self._align_dialog.deiconify()
         self._align_dialog.lift()
-        self._align_dialog.grab_set()
 
     def _cleanup_align_pick(self):
-        if hasattr(self, '_align_pick_binding'):
-            self.plane_canvas.canvas.unbind('<Button-1>', self._align_pick_binding)
-            del self._align_pick_binding
-        self.plane_canvas.interactive = True
+        if hasattr(self, '_align_pick_active') and self._align_pick_active:
+            self._align_pick_active = False
+            self.plane_canvas.canvas.bind('<Double-Button-1>', self.plane_canvas.fit)
         self.plane_canvas.set_cursor('')
 
     def _align_to_station_dialog(self, parent_dialog):
         if self.result is None or not hasattr(self.result, 'station') or len(self.result.station.position) == 0:
-            tk.messagebox.showinfo(message="请先打开包含车站的路线文件", parent=parent_dialog)
+            tk.messagebox.showinfo(message=i18n.get('dialog.no_station_data'), parent=parent_dialog)
             return
 
         dialog = tk.Toplevel(self.master)
-        dialog.title("对齐到车站")
+        dialog.title(i18n.get('dialog.align_to_station'))
         dialog.transient(parent_dialog)
-        dialog.grab_set()
 
         stnlist = []
         for stnkey in self.result.station.stationkey.keys():
@@ -1262,22 +1263,22 @@ class mainwindow(ttk.Frame):
         main_frame = ttk.Frame(dialog, padding='10 10 10 10')
         main_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
 
-        left_frame = ttk.LabelFrame(main_frame, text="车站1", padding='8 8 8 8')
+        left_frame = ttk.LabelFrame(main_frame, text=i18n.get('frame.station1'), padding='8 8 8 8')
         left_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(0, 5))
 
-        ttk.Label(left_frame, text="选择车站:").grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        ttk.Label(left_frame, text=i18n.get('label.select_station')).grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
         stn1_cb = ttk.Combobox(left_frame, values=stnlist, state='readonly', width=22)
         stn1_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
         if stnlist:
             stn1_cb.set(stnlist[0])
 
-        pick1_btn = ttk.Button(left_frame, text="选择背景上的点", command=lambda: self._start_align_pick(1, dialog, pick1_btn, pick2_btn))
+        pick1_btn = ttk.Button(left_frame, text=i18n.get('button.pick_on_bg'), command=lambda: self._start_align_pick(1, dialog, pick1_btn, pick2_btn))
         pick1_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
 
-        right_frame = ttk.LabelFrame(main_frame, text="车站2", padding='8 8 8 8')
+        right_frame = ttk.LabelFrame(main_frame, text=i18n.get('frame.station2'), padding='8 8 8 8')
         right_frame.grid(column=1, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(5, 0))
 
-        ttk.Label(right_frame, text="选择车站:").grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        ttk.Label(right_frame, text=i18n.get('label.select_station')).grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
         stn2_cb = ttk.Combobox(right_frame, values=stnlist, state='readonly', width=22)
         stn2_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
         if len(stnlist) > 1:
@@ -1285,7 +1286,7 @@ class mainwindow(ttk.Frame):
         elif stnlist:
             stn2_cb.set(stnlist[0])
 
-        pick2_btn = ttk.Button(right_frame, text="选择背景上的点", command=lambda: self._start_align_pick(2, dialog, pick1_btn, pick2_btn))
+        pick2_btn = ttk.Button(right_frame, text=i18n.get('button.pick_on_bg'), command=lambda: self._start_align_pick(2, dialog, pick1_btn, pick2_btn))
         pick2_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
 
         self._align_pick1 = None
@@ -1306,9 +1307,9 @@ class mainwindow(ttk.Frame):
         btn_frame = ttk.Frame(main_frame)
         btn_frame.grid(column=0, row=1, columnspan=2, pady=(12, 0))
 
-        ttk.Button(btn_frame, text="应用", command=on_apply).grid(column=0, row=0, padx=(0, 6))
-        ttk.Button(btn_frame, text="确定", command=on_ok).grid(column=1, row=0, padx=(0, 6))
-        ttk.Button(btn_frame, text="取消", command=on_cancel).grid(column=2, row=0)
+        ttk.Button(btn_frame, text=i18n.get('button.apply'), command=on_apply).grid(column=0, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text=i18n.get('button.ok'), command=on_ok).grid(column=1, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text=i18n.get('button.cancel'), command=on_cancel).grid(column=2, row=0)
 
         main_frame.columnconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
@@ -1320,14 +1321,14 @@ class mainwindow(ttk.Frame):
 
     def _compute_and_apply_alignment(self, stn1_val, stn2_val, dialog, close_parent):
         if self._align_pick1 is None or self._align_pick2 is None:
-            tk.messagebox.showinfo(message="请先在背景图上为两个车站分别选择对应的点", parent=dialog)
+            tk.messagebox.showinfo(message=i18n.get('dialog.pick_points_needed'), parent=dialog)
             return False
 
         s1 = self._get_station_world_coords(stn1_val)
         s2 = self._get_station_world_coords(stn2_val)
 
         if s1 is None or s2 is None:
-            tk.messagebox.showinfo(message="无法获取所选车站的坐标", parent=dialog)
+            tk.messagebox.showinfo(message=i18n.get('dialog.station_coord_error'), parent=dialog)
             return False
 
         p1 = self._align_pick1
@@ -1342,7 +1343,7 @@ class mainwindow(ttk.Frame):
         dp_dist = math.sqrt(dpx * dpx + dpy * dpy)
 
         if ds_dist < 1e-6 or dp_dist < 1e-6:
-            tk.messagebox.showinfo(message="两个车站或两个选取点之间的距离过小，无法计算对齐参数", parent=dialog)
+            tk.messagebox.showinfo(message=i18n.get('dialog.distance_too_short'), parent=dialog)
             return False
 
         brot_rad = math.radians(self.bg_image_params['rotation'])
@@ -1364,7 +1365,7 @@ class mainwindow(ttk.Frame):
         duv_dist = math.sqrt(du * du + dv * dv)
 
         if duv_dist < 1e-6:
-            tk.messagebox.showinfo(message="选取的两个背景点重合，无法计算对齐参数", parent=dialog)
+            tk.messagebox.showinfo(message=i18n.get('dialog.pick_points_coincident'), parent=dialog)
             return False
 
         scale_factor = ds_dist / duv_dist
