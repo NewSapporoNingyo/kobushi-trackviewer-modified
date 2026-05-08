@@ -1185,12 +1185,213 @@ class mainwindow(ttk.Frame):
         ttk.Button(btn_frame, text="确定", command=on_ok).grid(column=0, row=0, padx=(0, 8))
         ttk.Button(btn_frame, text="取消", command=dialog.destroy).grid(column=1, row=0)
 
+        ttk.Separator(frame, orient='horizontal').grid(column=0, row=len(fields)+1, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        ttk.Button(frame, text="对齐到车站", command=lambda: self._align_to_station_dialog(dialog)).grid(column=0, row=len(fields)+2, columnspan=2, pady=(8, 0))
+
         dialog.columnconfigure(0, weight=1)
         dialog.rowconfigure(0, weight=1)
         frame.columnconfigure(1, weight=1)
         var_x_entry = frame.grid_slaves(row=0, column=1)[0]
         var_x_entry.focus_set()
         dialog.wait_window()
+
+    def _get_station_world_coords(self, station_value):
+        key = station_value.split(',')[0]
+        distances = [k for k, v in self.result.station.position.items() if v == key]
+        if not distances:
+            return None
+        dist = distances[0]
+        own = self.result.owntrack_pos
+        idx = np.searchsorted(own[:, 0], dist)
+        if idx >= len(own):
+            idx = len(own) - 1
+        return (float(own[idx][1]), float(own[idx][2]))
+
+    def _start_align_pick(self, slot, dialog, btn1, btn2):
+        self._align_pick_slot = slot
+        self._align_dialog = dialog
+        self._align_pick_btn1 = btn1
+        self._align_pick_btn2 = btn2
+
+        dialog.grab_release()
+        dialog.withdraw()
+
+        self.plane_canvas.set_cursor('crosshair')
+        self.plane_canvas.interactive = False
+        self._align_pick_binding = self.plane_canvas.canvas.bind(
+            '<Button-1>', lambda e: self._on_align_canvas_click(e), add='+')
+
+    def _on_align_canvas_click(self, event):
+        wx, wy = self.plane_canvas.screen_to_world(event.x, event.y)
+
+        self._cleanup_align_pick()
+
+        slot = self._align_pick_slot
+        if slot == 1:
+            self._align_pick1 = (wx, wy)
+            self._align_pick_btn1.config(text="选择背景上的点 (OK)")
+        else:
+            self._align_pick2 = (wx, wy)
+            self._align_pick_btn2.config(text="选择背景上的点 (OK)")
+
+        self._align_dialog.deiconify()
+        self._align_dialog.lift()
+        self._align_dialog.grab_set()
+
+    def _cleanup_align_pick(self):
+        if hasattr(self, '_align_pick_binding'):
+            self.plane_canvas.canvas.unbind('<Button-1>', self._align_pick_binding)
+            del self._align_pick_binding
+        self.plane_canvas.interactive = True
+        self.plane_canvas.set_cursor('')
+
+    def _align_to_station_dialog(self, parent_dialog):
+        if self.result is None or not hasattr(self.result, 'station') or len(self.result.station.position) == 0:
+            tk.messagebox.showinfo(message="请先打开包含车站的路线文件", parent=parent_dialog)
+            return
+
+        dialog = tk.Toplevel(self.master)
+        dialog.title("对齐到车站")
+        dialog.transient(parent_dialog)
+        dialog.grab_set()
+
+        stnlist = []
+        for stnkey in self.result.station.stationkey.keys():
+            stnlist.append(stnkey + ', ' + self.result.station.stationkey[stnkey])
+
+        main_frame = ttk.Frame(dialog, padding='10 10 10 10')
+        main_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+
+        left_frame = ttk.LabelFrame(main_frame, text="车站1", padding='8 8 8 8')
+        left_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(0, 5))
+
+        ttk.Label(left_frame, text="选择车站:").grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        stn1_cb = ttk.Combobox(left_frame, values=stnlist, state='readonly', width=22)
+        stn1_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        if stnlist:
+            stn1_cb.set(stnlist[0])
+
+        pick1_btn = ttk.Button(left_frame, text="选择背景上的点", command=lambda: self._start_align_pick(1, dialog, pick1_btn, pick2_btn))
+        pick1_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
+
+        right_frame = ttk.LabelFrame(main_frame, text="车站2", padding='8 8 8 8')
+        right_frame.grid(column=1, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(5, 0))
+
+        ttk.Label(right_frame, text="选择车站:").grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        stn2_cb = ttk.Combobox(right_frame, values=stnlist, state='readonly', width=22)
+        stn2_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        if len(stnlist) > 1:
+            stn2_cb.set(stnlist[1])
+        elif stnlist:
+            stn2_cb.set(stnlist[0])
+
+        pick2_btn = ttk.Button(right_frame, text="选择背景上的点", command=lambda: self._start_align_pick(2, dialog, pick1_btn, pick2_btn))
+        pick2_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
+
+        self._align_pick1 = None
+        self._align_pick2 = None
+
+        def on_apply():
+            self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=False)
+
+        def on_ok():
+            if self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=True):
+                dialog.destroy()
+                parent_dialog.destroy()
+
+        def on_cancel():
+            self._cleanup_align_pick()
+            dialog.destroy()
+
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(column=0, row=1, columnspan=2, pady=(12, 0))
+
+        ttk.Button(btn_frame, text="应用", command=on_apply).grid(column=0, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text="确定", command=on_ok).grid(column=1, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text="取消", command=on_cancel).grid(column=2, row=0)
+
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+
+        dialog.protocol('WM_DELETE_WINDOW', on_cancel)
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+        dialog.wait_window()
+
+    def _compute_and_apply_alignment(self, stn1_val, stn2_val, dialog, close_parent):
+        if self._align_pick1 is None or self._align_pick2 is None:
+            tk.messagebox.showinfo(message="请先在背景图上为两个车站分别选择对应的点", parent=dialog)
+            return False
+
+        s1 = self._get_station_world_coords(stn1_val)
+        s2 = self._get_station_world_coords(stn2_val)
+
+        if s1 is None or s2 is None:
+            tk.messagebox.showinfo(message="无法获取所选车站的坐标", parent=dialog)
+            return False
+
+        p1 = self._align_pick1
+        p2 = self._align_pick2
+
+        dsx = s2[0] - s1[0]
+        dsy = s2[1] - s1[1]
+        dpx = p2[0] - p1[0]
+        dpy = p2[1] - p1[1]
+
+        ds_dist = math.sqrt(dsx * dsx + dsy * dsy)
+        dp_dist = math.sqrt(dpx * dpx + dpy * dpy)
+
+        if ds_dist < 1e-6 or dp_dist < 1e-6:
+            tk.messagebox.showinfo(message="两个车站或两个选取点之间的距离过小，无法计算对齐参数", parent=dialog)
+            return False
+
+        brot_rad = math.radians(self.bg_image_params['rotation'])
+        bx = self.bg_image_params['x']
+        by = self.bg_image_params['y']
+
+        dp1x = p1[0] - bx
+        dp1y = p1[1] - by
+        u1 = dp1x * math.cos(brot_rad) + dp1y * math.sin(brot_rad)
+        v1 = -dp1x * math.sin(brot_rad) + dp1y * math.cos(brot_rad)
+
+        dp2x = p2[0] - bx
+        dp2y = p2[1] - by
+        u2 = dp2x * math.cos(brot_rad) + dp2y * math.sin(brot_rad)
+        v2 = -dp2x * math.sin(brot_rad) + dp2y * math.cos(brot_rad)
+
+        du = u2 - u1
+        dv = v2 - v1
+        duv_dist = math.sqrt(du * du + dv * dv)
+
+        if duv_dist < 1e-6:
+            tk.messagebox.showinfo(message="选取的两个背景点重合，无法计算对齐参数", parent=dialog)
+            return False
+
+        scale_factor = ds_dist / duv_dist
+
+        angle_duv = math.atan2(dv, du)
+        angle_ds = math.atan2(dsy, dsx)
+        new_brot_rad = angle_ds - angle_duv
+        new_brot_deg = math.degrees(new_brot_rad) % 360.0
+
+        cos_brot = math.cos(new_brot_rad)
+        sin_brot = math.sin(new_brot_rad)
+        sx_u1 = scale_factor * (u1 * cos_brot - v1 * sin_brot)
+        sy_u1 = scale_factor * (u1 * sin_brot + v1 * cos_brot)
+        new_bx = s1[0] - sx_u1
+        new_by = s1[1] - sy_u1
+
+        self.bg_image_params['x'] = new_bx
+        self.bg_image_params['y'] = new_by
+        self.bg_image_params['width'] = self.bg_image_params['width'] * scale_factor
+        self.bg_image_params['height'] = self.bg_image_params['height'] * scale_factor
+        self.bg_image_params['rotation'] = new_brot_deg
+
+        if hasattr(self, 'plane_canvas'):
+            self.plane_canvas.redraw()
+
+        return True
+
     def customdialog_test(self, event=None):
         dialog_obj = dialog_multifields.dialog_multifields(self,\
                                         [{'name':'A', 'type':'str', 'label':'test A', 'default':'alpha'},\
