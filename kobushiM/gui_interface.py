@@ -20,6 +20,7 @@ import time
 import queue
 import webbrowser
 import argparse
+import math
 
 import tkinter as tk
 from tkinter import ttk
@@ -29,6 +30,7 @@ import tkinter.font as font
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from PIL import Image, ImageTk
 
 from ._version import __version__
 from . import mapinterpreter as interp
@@ -116,6 +118,16 @@ class mainwindow(ttk.Frame):
         self._log_warnings = []
         sys.stdout = LogInterceptor(sys.stdout, 'stdout', self._log_queue)
         sys.stderr = LogInterceptor(sys.stderr, 'stderr', self._log_queue)
+
+        self.bg_image_original = None
+        self.bg_image_tk = None
+        self.bg_image_params = {
+            'x': 0.0,
+            'y': 0.0,
+            'width': 5000.0,
+            'height': 5000.0,
+            'rotation': 0.0
+        }
 
         i18n.on_language_change(self.refresh_ui_text)
         self.refresh_ui_text()
@@ -340,6 +352,18 @@ class mainwindow(ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
+
+        self.bgimg_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
+        self.bgimg_control.grid(column=0, row=10, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+
+        self.bgimg_label = ttk.Label(self.bgimg_control, text="背景图片", font=font_title)
+        self.bgimg_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
+
+        self.bgimg_import_btn = ttk.Button(self.bgimg_control, text="导入", command=self.import_bgimg)
+        self.bgimg_import_btn.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+
+        self.bgimg_adjust_btn = ttk.Button(self.bgimg_control, text="调整", command=self.adjust_bgimg, state=tk.DISABLED)
+        self.bgimg_adjust_btn.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
         show_curve = self.show_curve_graph_val.get()
@@ -766,6 +790,27 @@ class mainwindow(ttk.Frame):
             othertrack_list=self.subwindow.othertrack_tree.get_checked())
 
         def render(view):
+            if hasattr(self, 'bg_image_original') and self.bg_image_original is not None:
+                vp = view.get_view_params()
+                cx, cy = view.world_to_screen(self.bg_image_params['x'], self.bg_image_params['y'])
+
+                px_w = int(self.bg_image_params['width'] * vp['sx_scale'])
+                px_h = int(self.bg_image_params['height'] * vp['sy_scale'])
+
+                if 0 < px_w < 15000 and 0 < px_h < 15000:
+                    try:
+                        resample_mode = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                        resized_img = self.bg_image_original.resize((px_w, px_h), resample_mode)
+
+                        view_rot_deg = math.degrees(vp['rotation'])
+                        total_rot_ccw = -self.bg_image_params['rotation'] - view_rot_deg
+                        rotated_img = resized_img.rotate(total_rot_ccw, expand=True)
+
+                        self.bg_image_tk = ImageTk.PhotoImage(rotated_img)
+                        view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER)
+                    except Exception:
+                        pass
+
             if len(data['owntrack']) > 0:
                 if self.curveval_val.get():
                     for sec in data['curve_sections']:
@@ -1065,6 +1110,87 @@ class mainwindow(ttk.Frame):
     def aboutwindow(self, event=None):
         msg = i18n.get('about.text', version=__version__)
         tk.messagebox.showinfo(message=msg)
+    def import_bgimg(self):
+        filepath = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])
+        if not filepath:
+            return
+        try:
+            self.bg_image_original = Image.open(filepath)
+        except Exception as e:
+            tk.messagebox.showerror(message=f"无法加载图片: {e}")
+            return
+
+        start_x, start_y = 0.0, 0.0
+        if self.result is not None and hasattr(self.result, 'environment') and len(self.result.environment.owntrack_pos) > 0:
+            start_x = float(self.result.environment.owntrack_pos[0][1])
+            start_y = float(self.result.environment.owntrack_pos[0][2])
+
+        img_w, img_h = self.bg_image_original.size
+        self.bg_image_params['x'] = start_x
+        self.bg_image_params['y'] = start_y
+        self.bg_image_params['width'] = 5000.0
+        self.bg_image_params['height'] = 5000.0 * (img_h / img_w)
+        self.bg_image_params['rotation'] = 0.0
+
+        self.bgimg_adjust_btn.config(state=tk.NORMAL)
+        if hasattr(self, 'plane_canvas'):
+            self.plane_canvas.redraw()
+
+    def adjust_bgimg(self):
+        if self.bg_image_original is None:
+            return
+
+        dialog = tk.Toplevel(self.master)
+        dialog.title("调整背景图片")
+        dialog.transient(self.master)
+        dialog.grab_set()
+
+        frame = ttk.Frame(dialog, padding='10 10 10 10')
+        frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+
+        var_x = tk.DoubleVar(value=self.bg_image_params['x'])
+        var_y = tk.DoubleVar(value=self.bg_image_params['y'])
+        var_width = tk.DoubleVar(value=self.bg_image_params['width'])
+        var_height = tk.DoubleVar(value=self.bg_image_params['height'])
+        var_rotation = tk.DoubleVar(value=self.bg_image_params['rotation'])
+
+        fields = [
+            ("X (m)", var_x),
+            ("Y (m)", var_y),
+            ("宽度 (m)", var_width),
+            ("高度 (m)", var_height),
+            ("旋转角度 (°)", var_rotation),
+        ]
+
+        for i, (label_text, var) in enumerate(fields):
+            ttk.Label(frame, text=label_text).grid(column=0, row=i, sticky=tk.W, padx=(0, 8), pady=2)
+            ttk.Entry(frame, textvariable=var, width=20).grid(column=1, row=i, sticky=(tk.W, tk.E), pady=2)
+
+        def on_ok():
+            try:
+                self.bg_image_params['x'] = var_x.get()
+                self.bg_image_params['y'] = var_y.get()
+                self.bg_image_params['width'] = var_width.get()
+                self.bg_image_params['height'] = var_height.get()
+                self.bg_image_params['rotation'] = var_rotation.get()
+                dialog.destroy()
+                if hasattr(self, 'plane_canvas'):
+                    self.plane_canvas.redraw()
+            except ValueError:
+                tk.messagebox.showerror(message="输入值无效，请输入数字", parent=dialog)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(column=0, row=len(fields), columnspan=2, pady=(10, 0))
+
+        ttk.Button(btn_frame, text="确定", command=on_ok).grid(column=0, row=0, padx=(0, 8))
+        ttk.Button(btn_frame, text="取消", command=dialog.destroy).grid(column=1, row=0)
+
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        var_x_entry = frame.grid_slaves(row=0, column=1)[0]
+        var_x_entry.focus_set()
+        dialog.wait_window()
     def customdialog_test(self, event=None):
         dialog_obj = dialog_multifields.dialog_multifields(self,\
                                         [{'name':'A', 'type':'str', 'label':'test A', 'default':'alpha'},\

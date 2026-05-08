@@ -1,1 +1,2 @@
 python launcher.py
+pause
