@@ -20,6 +20,7 @@ import time
 import queue
 import webbrowser
 import argparse
+import math
 
 import tkinter as tk
 from tkinter import ttk
@@ -29,6 +30,7 @@ import tkinter.font as font
 
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from PIL import Image, ImageTk
 
 from ._version import __version__
 from . import mapinterpreter as interp
@@ -117,6 +119,16 @@ class mainwindow(ttk.Frame):
         sys.stdout = LogInterceptor(sys.stdout, 'stdout', self._log_queue)
         sys.stderr = LogInterceptor(sys.stderr, 'stderr', self._log_queue)
 
+        self.bg_image_original = None
+        self.bg_image_tk = None
+        self.bg_image_params = {
+            'x': 0.0,
+            'y': 0.0,
+            'width': 5000.0,
+            'height': 5000.0,
+            'rotation': 0.0
+        }
+
         i18n.on_language_change(self.refresh_ui_text)
         self.refresh_ui_text()
         self.after(100, self.check_log_queue)
@@ -190,6 +202,12 @@ class mainwindow(ttk.Frame):
             self.subwindow.refresh_ui_text()
         if hasattr(self, 'fontctrl'):
             self.fontctrl.refresh_ui_text()
+        if hasattr(self, 'bgimg_label'):
+            self.bgimg_label.config(text=i18n.get('frame.bgimage'))
+        if hasattr(self, 'bgimg_import_btn'):
+            self.bgimg_import_btn.config(text=i18n.get('button.import_bg'))
+        if hasattr(self, 'bgimg_adjust_btn'):
+            self.bgimg_adjust_btn.config(text=i18n.get('button.adjust_bg'))
         if self.result is not None:
             self.plot_all()
 
@@ -340,6 +358,18 @@ class mainwindow(ttk.Frame):
         self.rowconfigure(0, weight=0)
         self.rowconfigure(1, weight=1)
         self.rowconfigure(2, weight=0)
+
+        self.bgimg_control = ttk.Frame(self.control_frame, padding='3 3 3 3', borderwidth=1, relief='ridge')
+        self.bgimg_control.grid(column=0, row=10, sticky=(tk.S, tk.W, tk.E), pady=(6, 0))
+
+        self.bgimg_label = ttk.Label(self.bgimg_control, text=i18n.get('frame.bgimage'), font=font_title)
+        self.bgimg_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
+
+        self.bgimg_import_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.import_bg'), command=self.import_bgimg)
+        self.bgimg_import_btn.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+
+        self.bgimg_adjust_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.adjust_bg'), command=self.adjust_bgimg, state=tk.DISABLED)
+        self.bgimg_adjust_btn.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
         show_curve = self.show_curve_graph_val.get()
@@ -766,6 +796,28 @@ class mainwindow(ttk.Frame):
             othertrack_list=self.subwindow.othertrack_tree.get_checked())
 
         def render(view):
+            if hasattr(self, 'bg_image_original') and self.bg_image_original is not None:
+                vp = view.get_view_params()
+                cx, cy = view.world_to_screen(self.bg_image_params['x'], self.bg_image_params['y'])
+
+                px_w = int(self.bg_image_params['width'] * vp['sx_scale'])
+                px_h = int(self.bg_image_params['height'] * vp['sy_scale'])
+
+                if 0 < px_w < 15000 and 0 < px_h < 15000:
+                    try:
+                        resample_mode = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
+                        resized_img = self.bg_image_original.resize((px_w, px_h), resample_mode)
+
+                        view_rot_deg = math.degrees(vp['rotation'])
+                        total_rot_ccw = -self.bg_image_params['rotation'] - view_rot_deg
+                        rotated_img = resized_img.rotate(total_rot_ccw, expand=True)
+
+                        self.bg_image_tk = ImageTk.PhotoImage(rotated_img)
+                        img_id = view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER, tags=('bgimage',))
+                        view.canvas.tag_lower(img_id)
+                    except Exception:
+                        pass
+
             if len(data['owntrack']) > 0:
                 if self.curveval_val.get():
                     for sec in data['curve_sections']:
@@ -1065,6 +1117,282 @@ class mainwindow(ttk.Frame):
     def aboutwindow(self, event=None):
         msg = i18n.get('about.text', version=__version__)
         tk.messagebox.showinfo(message=msg)
+    def import_bgimg(self):
+        filepath = filedialog.askopenfilename(filetypes=[("Image Files", "*.png;*.jpg;*.jpeg")])
+        if not filepath:
+            return
+        try:
+            self.bg_image_original = Image.open(filepath)
+        except Exception as e:
+            tk.messagebox.showerror(message=i18n.get('dialog.bgimg_load_error', error=str(e)))
+            return
+
+        start_x, start_y = 0.0, 0.0
+        if self.result is not None and hasattr(self.result, 'environment') and len(self.result.environment.owntrack_pos) > 0:
+            start_x = float(self.result.environment.owntrack_pos[0][1])
+            start_y = float(self.result.environment.owntrack_pos[0][2])
+
+        img_w, img_h = self.bg_image_original.size
+        self.bg_image_params['x'] = start_x
+        self.bg_image_params['y'] = start_y
+        self.bg_image_params['width'] = 5000.0
+        self.bg_image_params['height'] = 5000.0 * (img_h / img_w)
+        self.bg_image_params['rotation'] = 0.0
+
+        self.bgimg_adjust_btn.config(state=tk.NORMAL)
+        if hasattr(self, 'plane_canvas'):
+            self.plane_canvas.redraw()
+
+    def adjust_bgimg(self):
+        if self.bg_image_original is None:
+            return
+
+        dialog = tk.Toplevel(self.master)
+        dialog.title(i18n.get('dialog.adjust_bgimg'))
+        dialog.transient(self.master)
+
+        frame = ttk.Frame(dialog, padding='10 10 10 10')
+        frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+
+        var_x = tk.DoubleVar(value=self.bg_image_params['x'])
+        var_y = tk.DoubleVar(value=self.bg_image_params['y'])
+        var_width = tk.DoubleVar(value=self.bg_image_params['width'])
+        var_height = tk.DoubleVar(value=self.bg_image_params['height'])
+        var_rotation = tk.DoubleVar(value=self.bg_image_params['rotation'])
+
+        fields = [
+            (i18n.get('label.bgimg_x'), var_x),
+            (i18n.get('label.bgimg_y'), var_y),
+            (i18n.get('label.bgimg_width'), var_width),
+            (i18n.get('label.bgimg_height'), var_height),
+            (i18n.get('label.bgimg_rotation'), var_rotation),
+        ]
+
+        for i, (label_text, var) in enumerate(fields):
+            ttk.Label(frame, text=label_text).grid(column=0, row=i, sticky=tk.W, padx=(0, 8), pady=2)
+            ttk.Entry(frame, textvariable=var, width=20).grid(column=1, row=i, sticky=(tk.W, tk.E), pady=2)
+
+        def on_ok():
+            try:
+                self.bg_image_params['x'] = var_x.get()
+                self.bg_image_params['y'] = var_y.get()
+                self.bg_image_params['width'] = var_width.get()
+                self.bg_image_params['height'] = var_height.get()
+                self.bg_image_params['rotation'] = var_rotation.get()
+                dialog.destroy()
+                if hasattr(self, 'plane_canvas'):
+                    self.plane_canvas.redraw()
+            except ValueError:
+                tk.messagebox.showerror(message=i18n.get('dialog.invalid_number'), parent=dialog)
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.grid(column=0, row=len(fields), columnspan=2, pady=(10, 0))
+
+        ttk.Button(btn_frame, text=i18n.get('button.ok'), command=on_ok).grid(column=0, row=0, padx=(0, 8))
+        ttk.Button(btn_frame, text=i18n.get('button.cancel'), command=dialog.destroy).grid(column=1, row=0)
+
+        ttk.Separator(frame, orient='horizontal').grid(column=0, row=len(fields)+1, columnspan=2, sticky=(tk.W, tk.E), pady=(10, 0))
+        ttk.Button(frame, text=i18n.get('button.align_to_station'), command=lambda: self._align_to_station_dialog(dialog)).grid(column=0, row=len(fields)+2, columnspan=2, pady=(8, 0))
+
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+        frame.columnconfigure(1, weight=1)
+        var_x_entry = frame.grid_slaves(row=0, column=1)[0]
+        var_x_entry.focus_set()
+        dialog.wait_window()
+
+    def _get_station_world_coords(self, station_value):
+        key = station_value.split(',')[0]
+        distances = [k for k, v in self.result.station.position.items() if v == key]
+        if not distances:
+            return None
+        dist = distances[0]
+        own = self.result.owntrack_pos
+        idx = np.searchsorted(own[:, 0], dist)
+        if idx >= len(own):
+            idx = len(own) - 1
+        return (float(own[idx][1]), float(own[idx][2]))
+
+    def _start_align_pick(self, slot, dialog, btn1, btn2):
+        self._align_pick_slot = slot
+        self._align_dialog = dialog
+        self._align_pick_btn1 = btn1
+        self._align_pick_btn2 = btn2
+        self._align_pick_active = True
+
+        dialog.withdraw()
+
+        self.plane_canvas.set_cursor('crosshair')
+        self.plane_canvas.canvas.bind('<Double-Button-1>', lambda e: self._on_align_canvas_dblclick(e))
+
+    def _on_align_canvas_dblclick(self, event):
+        wx, wy = self.plane_canvas.screen_to_world(event.x, event.y)
+
+        self._cleanup_align_pick()
+
+        slot = self._align_pick_slot
+        if slot == 1:
+            self._align_pick1 = (wx, wy)
+            self._align_pick_btn1.config(text=i18n.get('button.pick_on_bg_ok'))
+        else:
+            self._align_pick2 = (wx, wy)
+            self._align_pick_btn2.config(text=i18n.get('button.pick_on_bg_ok'))
+
+        self._align_dialog.deiconify()
+        self._align_dialog.lift()
+
+    def _cleanup_align_pick(self):
+        if hasattr(self, '_align_pick_active') and self._align_pick_active:
+            self._align_pick_active = False
+            self.plane_canvas.canvas.bind('<Double-Button-1>', self.plane_canvas.fit)
+        self.plane_canvas.set_cursor('')
+
+    def _align_to_station_dialog(self, parent_dialog):
+        if self.result is None or not hasattr(self.result, 'station') or len(self.result.station.position) == 0:
+            tk.messagebox.showinfo(message=i18n.get('dialog.no_station_data'), parent=parent_dialog)
+            return
+
+        dialog = tk.Toplevel(self.master)
+        dialog.title(i18n.get('dialog.align_to_station'))
+        dialog.transient(parent_dialog)
+
+        stnlist = []
+        for stnkey in self.result.station.stationkey.keys():
+            stnlist.append(stnkey + ', ' + self.result.station.stationkey[stnkey])
+
+        main_frame = ttk.Frame(dialog, padding='10 10 10 10')
+        main_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+
+        left_frame = ttk.LabelFrame(main_frame, text=i18n.get('frame.station1'), padding='8 8 8 8')
+        left_frame.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(0, 5))
+
+        ttk.Label(left_frame, text=i18n.get('label.select_station')).grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        stn1_cb = ttk.Combobox(left_frame, values=stnlist, state='readonly', width=22)
+        stn1_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        if stnlist:
+            stn1_cb.set(stnlist[0])
+
+        pick1_btn = ttk.Button(left_frame, text=i18n.get('button.pick_on_bg'), command=lambda: self._start_align_pick(1, dialog, pick1_btn, pick2_btn))
+        pick1_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
+
+        right_frame = ttk.LabelFrame(main_frame, text=i18n.get('frame.station2'), padding='8 8 8 8')
+        right_frame.grid(column=1, row=0, sticky=(tk.N, tk.W, tk.E, tk.S), padx=(5, 0))
+
+        ttk.Label(right_frame, text=i18n.get('label.select_station')).grid(column=0, row=0, sticky=tk.W, pady=(0, 4))
+        stn2_cb = ttk.Combobox(right_frame, values=stnlist, state='readonly', width=22)
+        stn2_cb.grid(column=0, row=1, sticky=(tk.W, tk.E), pady=(0, 8))
+        if len(stnlist) > 1:
+            stn2_cb.set(stnlist[1])
+        elif stnlist:
+            stn2_cb.set(stnlist[0])
+
+        pick2_btn = ttk.Button(right_frame, text=i18n.get('button.pick_on_bg'), command=lambda: self._start_align_pick(2, dialog, pick1_btn, pick2_btn))
+        pick2_btn.grid(column=0, row=2, sticky=(tk.W, tk.E))
+
+        self._align_pick1 = None
+        self._align_pick2 = None
+
+        def on_apply():
+            self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=False)
+
+        def on_ok():
+            if self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=True):
+                dialog.destroy()
+                parent_dialog.destroy()
+
+        def on_cancel():
+            self._cleanup_align_pick()
+            dialog.destroy()
+
+        btn_frame = ttk.Frame(main_frame)
+        btn_frame.grid(column=0, row=1, columnspan=2, pady=(12, 0))
+
+        ttk.Button(btn_frame, text=i18n.get('button.apply'), command=on_apply).grid(column=0, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text=i18n.get('button.ok'), command=on_ok).grid(column=1, row=0, padx=(0, 6))
+        ttk.Button(btn_frame, text=i18n.get('button.cancel'), command=on_cancel).grid(column=2, row=0)
+
+        main_frame.columnconfigure(0, weight=1)
+        main_frame.columnconfigure(1, weight=1)
+
+        dialog.protocol('WM_DELETE_WINDOW', on_cancel)
+        dialog.columnconfigure(0, weight=1)
+        dialog.rowconfigure(0, weight=1)
+        dialog.wait_window()
+
+    def _compute_and_apply_alignment(self, stn1_val, stn2_val, dialog, close_parent):
+        if self._align_pick1 is None or self._align_pick2 is None:
+            tk.messagebox.showinfo(message=i18n.get('dialog.pick_points_needed'), parent=dialog)
+            return False
+
+        s1 = self._get_station_world_coords(stn1_val)
+        s2 = self._get_station_world_coords(stn2_val)
+
+        if s1 is None or s2 is None:
+            tk.messagebox.showinfo(message=i18n.get('dialog.station_coord_error'), parent=dialog)
+            return False
+
+        p1 = self._align_pick1
+        p2 = self._align_pick2
+
+        dsx = s2[0] - s1[0]
+        dsy = s2[1] - s1[1]
+        dpx = p2[0] - p1[0]
+        dpy = p2[1] - p1[1]
+
+        ds_dist = math.sqrt(dsx * dsx + dsy * dsy)
+        dp_dist = math.sqrt(dpx * dpx + dpy * dpy)
+
+        if ds_dist < 1e-6 or dp_dist < 1e-6:
+            tk.messagebox.showinfo(message=i18n.get('dialog.distance_too_short'), parent=dialog)
+            return False
+
+        brot_rad = math.radians(self.bg_image_params['rotation'])
+        bx = self.bg_image_params['x']
+        by = self.bg_image_params['y']
+
+        dp1x = p1[0] - bx
+        dp1y = p1[1] - by
+        u1 = dp1x * math.cos(brot_rad) + dp1y * math.sin(brot_rad)
+        v1 = -dp1x * math.sin(brot_rad) + dp1y * math.cos(brot_rad)
+
+        dp2x = p2[0] - bx
+        dp2y = p2[1] - by
+        u2 = dp2x * math.cos(brot_rad) + dp2y * math.sin(brot_rad)
+        v2 = -dp2x * math.sin(brot_rad) + dp2y * math.cos(brot_rad)
+
+        du = u2 - u1
+        dv = v2 - v1
+        duv_dist = math.sqrt(du * du + dv * dv)
+
+        if duv_dist < 1e-6:
+            tk.messagebox.showinfo(message=i18n.get('dialog.pick_points_coincident'), parent=dialog)
+            return False
+
+        scale_factor = ds_dist / duv_dist
+
+        angle_duv = math.atan2(dv, du)
+        angle_ds = math.atan2(dsy, dsx)
+        new_brot_rad = angle_ds - angle_duv
+        new_brot_deg = math.degrees(new_brot_rad) % 360.0
+
+        cos_brot = math.cos(new_brot_rad)
+        sin_brot = math.sin(new_brot_rad)
+        sx_u1 = scale_factor * (u1 * cos_brot - v1 * sin_brot)
+        sy_u1 = scale_factor * (u1 * sin_brot + v1 * cos_brot)
+        new_bx = s1[0] - sx_u1
+        new_by = s1[1] - sy_u1
+
+        self.bg_image_params['x'] = new_bx
+        self.bg_image_params['y'] = new_by
+        self.bg_image_params['width'] = self.bg_image_params['width'] * scale_factor
+        self.bg_image_params['height'] = self.bg_image_params['height'] * scale_factor
+        self.bg_image_params['rotation'] = new_brot_deg
+
+        if hasattr(self, 'plane_canvas'):
+            self.plane_canvas.redraw()
+
+        return True
+
     def customdialog_test(self, event=None):
         dialog_obj = dialog_multifields.dialog_multifields(self,\
                                         [{'name':'A', 'type':'str', 'label':'test A', 'default':'alpha'},\
