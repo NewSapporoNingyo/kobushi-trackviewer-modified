@@ -141,6 +141,7 @@ _translations = {
 
         # Background image
         'frame.bgimage': '背景画像',
+        'chk.bgimg_show': '表示',
         'button.import_bg': 'インポート',
         'button.adjust_bg': '調整',
         'button.align_to_station': '駅に合わせる',
@@ -267,6 +268,7 @@ _translations = {
 
         # Background image
         'frame.bgimage': 'Background Image',
+        'chk.bgimg_show': 'Show',
         'button.import_bg': 'Import',
         'button.adjust_bg': 'Adjust',
         'button.align_to_station': 'Align to Station',
@@ -393,6 +395,7 @@ _translations = {
 
         # Background image
         'frame.bgimage': '背景图片',
+        'chk.bgimg_show': '显示',
         'button.import_bg': '导入',
         'button.adjust_bg': '调整',
         'button.align_to_station': '对齐到车站',

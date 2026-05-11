@@ -15,7 +15,7 @@
 '''
 
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from . import trackgenerator as tgen
 from . import i18n
 
@@ -32,7 +32,8 @@ class Mapplot():
 
         self.environment.othertrack_pos = {}
         othertrack_keys = list(self.environment.othertrack.data.keys())
-        with ThreadPoolExecutor() as executor:
+        # 优化：使用 ProcessPoolExecutor 替代 ThreadPoolExecutor 以突破 GIL 限制，加速计算密集型任务
+        with ProcessPoolExecutor() as executor:
             futures = {
                 executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key 
                 for key in othertrack_keys

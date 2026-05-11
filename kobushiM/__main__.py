@@ -15,4 +15,5 @@
 '''
 from . import gui_interface
 
-gui_interface.main()
+if __name__ == '__main__':
+    gui_interface.main()
