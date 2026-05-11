@@ -591,6 +591,7 @@ class PlotCanvas(ttk.Frame):
     def _stop_pan(self, event):
         if self._pan_deferred:
             self._pan_deferred = False
+            self._last_drag = None
             self.redraw()
 
     def _start_rotate(self, event):

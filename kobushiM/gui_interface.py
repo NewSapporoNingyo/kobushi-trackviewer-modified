@@ -806,25 +806,97 @@ class mainwindow(ttk.Frame):
         def render(view):
             if self.bgimg_show_val.get() and hasattr(self, 'bg_image_original') and self.bg_image_original is not None:
                 vp = view.get_view_params()
-                cx, cy = view.world_to_screen(self.bg_image_params['x'], self.bg_image_params['y'])
 
-                px_w = int(self.bg_image_params['width'] * vp['sx_scale'])
-                px_h = int(self.bg_image_params['height'] * vp['sy_scale'])
+                margin = 0.5
+                vis_xmin, vis_ymin, vis_xmax, vis_ymax = view._get_visible_world_bounds(margin=margin)
 
-                if 0 < px_w < 15000 and 0 < px_h < 15000:
-                    try:
-                        resample_mode = Image.Resampling.LANCZOS if hasattr(Image, "Resampling") else Image.LANCZOS
-                        resized_img = self.bg_image_original.resize((px_w, px_h), resample_mode)
+                bg_x = self.bg_image_params['x']
+                bg_y = self.bg_image_params['y']
+                bg_w = self.bg_image_params['width']
+                bg_h = self.bg_image_params['height']
+                bg_rot = self.bg_image_params['rotation']
 
-                        view_rot_deg = math.degrees(vp['rotation'])
-                        total_rot_ccw = -self.bg_image_params['rotation'] - view_rot_deg
-                        rotated_img = resized_img.rotate(total_rot_ccw, expand=True)
+                vis_cx, vis_cy = (vis_xmin + vis_xmax) / 2.0, (vis_ymin + vis_ymax) / 2.0
+                vis_radius = math.hypot(vis_xmax - vis_xmin, vis_ymax - vis_ymin) / 2.0
+                bg_radius = math.hypot(bg_w, bg_h) / 2.0
+                if math.hypot(bg_x - vis_cx, bg_y - vis_cy) > (bg_radius + vis_radius):
+                    return
 
-                        self.bg_image_tk = ImageTk.PhotoImage(rotated_img)
-                        img_id = view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER, tags=('bgimage',))
-                        view.canvas.tag_lower(img_id)
-                    except Exception:
-                        pass
+                orig_w, orig_h = self.bg_image_original.size
+
+                rad = math.radians(bg_rot)
+                cos_r, sin_r = math.cos(rad), math.sin(rad)
+
+                corners_world = [
+                    (vis_xmin, vis_ymin), (vis_xmax, vis_ymin),
+                    (vis_xmin, vis_ymax), (vis_xmax, vis_ymax)
+                ]
+                corners_img = []
+                for wx, wy in corners_world:
+                    dx = wx - bg_x
+                    dy = wy - bg_y
+                    local_x = dx * cos_r + dy * sin_r
+                    local_y = -dx * sin_r + dy * cos_r
+                    px = (local_x / bg_w) * orig_w + orig_w / 2.0
+                    py = (local_y / bg_h) * orig_h + orig_h / 2.0
+                    corners_img.append((px, py))
+
+                crop_xmin = max(0, int(min(p[0] for p in corners_img)))
+                crop_xmax = min(orig_w, int(max(p[0] for p in corners_img)))
+                crop_ymin = max(0, int(min(p[1] for p in corners_img)))
+                crop_ymax = min(orig_h, int(max(p[1] for p in corners_img)))
+
+                if crop_xmax <= crop_xmin or crop_ymax <= crop_ymin:
+                    return
+
+                crop_w = crop_xmax - crop_xmin
+                crop_h = crop_ymax - crop_ymin
+
+                px_w = int(bg_w * vp['sx_scale'])
+                px_h = int(bg_h * vp['sy_scale'])
+                target_px_w = int(crop_w / orig_w * px_w)
+                target_px_h = int(crop_h / orig_h * px_h)
+
+                if target_px_w <= 0 or target_px_h <= 0:
+                    return
+
+                if target_px_w > 15000 or target_px_h > 15000:
+                    return
+
+                try:
+                    if hasattr(Image, "Resampling"):
+                        modes = {'high': Image.Resampling.LANCZOS, 'low': Image.Resampling.NEAREST}
+                    else:
+                        modes = {'high': Image.LANCZOS, 'low': Image.NEAREST}
+
+                    is_panning = getattr(view, '_last_drag', None) is not None
+                    resample_mode = modes['low'] if is_panning else modes['high']
+
+                    cropped_img = self.bg_image_original.crop((crop_xmin, crop_ymin, crop_xmax, crop_ymax))
+                    resized_img = cropped_img.resize((target_px_w, target_px_h), resample_mode)
+
+                    view_rot_deg = math.degrees(vp['rotation'])
+                    total_rot_ccw = -bg_rot - view_rot_deg
+                    rotated_img = resized_img.rotate(total_rot_ccw, expand=True)
+
+                    offset_x_px = (crop_xmin + crop_xmax) / 2.0 - orig_w / 2.0
+                    offset_y_px = (crop_ymin + crop_ymax) / 2.0 - orig_h / 2.0
+                    offset_local_x = (offset_x_px / orig_w) * bg_w
+                    offset_local_y = (offset_y_px / orig_h) * bg_h
+
+                    offset_w_x = offset_local_x * cos_r - offset_local_y * sin_r
+                    offset_w_y = offset_local_x * sin_r + offset_local_y * cos_r
+
+                    crop_center_w_x = bg_x + offset_w_x
+                    crop_center_w_y = bg_y + offset_w_y
+
+                    cx, cy = view.world_to_screen(crop_center_w_x, crop_center_w_y)
+
+                    self.bg_image_tk = ImageTk.PhotoImage(rotated_img)
+                    img_id = view.canvas.create_image(cx, cy, image=self.bg_image_tk, anchor=tk.CENTER, tags=('bgimage',))
+                    view.canvas.tag_lower(img_id)
+                except Exception:
+                    pass
 
             if len(data['owntrack']) > 0:
                 if self.curveval_val.get():
