@@ -92,6 +92,7 @@ class mainwindow(ttk.Frame):
         self.result = None
         self.profYlim = None
         self.default_track_interval = stepdist
+        self.bgimg_show_val = tk.BooleanVar(value=True)
         
         super().__init__(master, padding='3 3 3 3')
         self.master.title('Kobushi trackviewer ver. {:s}'.format(__version__))
@@ -208,6 +209,8 @@ class mainwindow(ttk.Frame):
             self.bgimg_import_btn.config(text=i18n.get('button.import_bg'))
         if hasattr(self, 'bgimg_adjust_btn'):
             self.bgimg_adjust_btn.config(text=i18n.get('button.adjust_bg'))
+        if hasattr(self, 'bgimg_show_chk'):
+            self.bgimg_show_chk.config(text=i18n.get('chk.bgimg_show'))
         if self.result is not None:
             self.plot_all()
 
@@ -365,11 +368,14 @@ class mainwindow(ttk.Frame):
         self.bgimg_label = ttk.Label(self.bgimg_control, text=i18n.get('frame.bgimage'), font=font_title)
         self.bgimg_label.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E))
 
+        self.bgimg_show_chk = ttk.Checkbutton(self.bgimg_control, text=i18n.get('chk.bgimg_show'), variable=self.bgimg_show_val, command=self.on_bgimg_show_toggle, state=tk.DISABLED)
+        self.bgimg_show_chk.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+
         self.bgimg_import_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.import_bg'), command=self.import_bgimg)
-        self.bgimg_import_btn.grid(column=0, row=1, sticky=(tk.N, tk.W, tk.E))
+        self.bgimg_import_btn.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
 
         self.bgimg_adjust_btn = ttk.Button(self.bgimg_control, text=i18n.get('button.adjust_bg'), command=self.adjust_bgimg, state=tk.DISABLED)
-        self.bgimg_adjust_btn.grid(column=0, row=2, sticky=(tk.N, tk.W, tk.E))
+        self.bgimg_adjust_btn.grid(column=0, row=3, sticky=(tk.N, tk.W, tk.E))
     def update_pane_layout(self):
         show_gradient = self.show_gradient_graph_val.get()
         show_curve = self.show_curve_graph_val.get()
@@ -422,6 +428,8 @@ class mainwindow(ttk.Frame):
             self.gradientval_chk.config(state='normal')
         else:
             self.gradientval_chk.config(state='disabled')
+        self.plot_all()
+    def on_bgimg_show_toggle(self):
         self.plot_all()
     def check_log_queue(self):
         try:
@@ -796,7 +804,7 @@ class mainwindow(ttk.Frame):
             othertrack_list=self.subwindow.othertrack_tree.get_checked())
 
         def render(view):
-            if hasattr(self, 'bg_image_original') and self.bg_image_original is not None:
+            if self.bgimg_show_val.get() and hasattr(self, 'bg_image_original') and self.bg_image_original is not None:
                 vp = view.get_view_params()
                 cx, cy = view.world_to_screen(self.bg_image_params['x'], self.bg_image_params['y'])
 
@@ -1140,6 +1148,7 @@ class mainwindow(ttk.Frame):
         self.bg_image_params['rotation'] = 0.0
 
         self.bgimg_adjust_btn.config(state=tk.NORMAL)
+        self.bgimg_show_chk.config(state=tk.NORMAL)
         if hasattr(self, 'plane_canvas'):
             self.plane_canvas.redraw()
 

@@ -33,7 +33,8 @@ class ParseMap(Transformer):
         self.promptmode = prompt
         
         grammer_fp = loadmapgrammer.loadmapgrammer()
-        self.parser = Lark(grammer_fp.read(), parser='lalr', maybe_placeholders=True) if parser == None else parser
+        # 优化：开启 Lark cache 以提升二次加载及冷启动性能
+        self.parser = Lark(grammer_fp.read(), parser='lalr', maybe_placeholders=True, cache=True) if parser == None else parser
         grammer_fp.close()
         
         if(env==None):
