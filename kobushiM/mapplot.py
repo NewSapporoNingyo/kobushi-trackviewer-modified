@@ -39,7 +39,7 @@ class Mapplot():
                 gen = tgen.OtherTrackGenerator(self.environment, key)
                 self.environment.othertrack_pos[key] = gen.generate()
         else:
-            with ProcessPoolExecutor() as executor:
+            with ThreadPoolExecutor() as executor:
                 futures = {
                     executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key
                     for key in othertrack_keys
