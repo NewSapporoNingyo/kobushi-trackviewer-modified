@@ -20,6 +20,7 @@ import sys
 import pathlib
 import os
 import time
+import threading
 import queue
 import webbrowser
 import argparse
@@ -757,50 +758,61 @@ class mainwindow(ttk.Frame):
             self.filedir_entry_val.set(inputdir)
             
             self._clear_logs()
-            t_start = time.perf_counter()
-            interpreter = interp.ParseMap(None,self.parser)
-            self.result = interpreter.load_files(inputdir)
             
-            self.dist_range_sel.set('all')
-            if(len(self.result.station.position) > 0):
-                self.dmin = round(min(self.result.station.position.keys()),-2) - 500
-                self.dmax = round(max(self.result.station.position.keys()),-2) + 500
-                self.distrange_min = self.dmin
-                self.distrange_max = self.dmax
-            else:
-                self.dmin = round(min(self.result.controlpoints.list_cp),-2) - 500
-                self.dmax = round(max(self.result.controlpoints.list_cp),-2) + 500
-                self.distrange_min = self.dmin
-                self.distrange_max = self.dmax
+            def _load_task():
+                t_start = time.perf_counter()
+                print('Start loading file: '+inputdir)
+                interpreter = interp.ParseMap(None,self.parser)
+                try:
+                    result = interpreter.load_files(inputdir)
+                except Exception as e:
+                    print('Error during loading: '+str(e))
+                    return
                 
-            # self.distrange_min/max — the maximum/minimum displayable distance range for the target map    self.distrange_min/max — 対象のマップで表示可能な距離程の最大最小値を示す   self.distrange_min/max — 目标地图中可显示距离范围的最大/最小值
-            # self.dmin/dmax — the actual distance range currently plotted on screen    self.dmin/dmax — 実際に画面にプロットする距離程の範囲を示す   self.dmin/dmax — 实际在屏幕上绘制的距离范围
+                if(len(result.station.position) > 0):
+                    dmin = round(min(result.station.position.keys()),-2) - 500
+                    dmax = round(max(result.station.position.keys()),-2) + 500
+                else:
+                    dmin = round(min(result.controlpoints.list_cp),-2) - 500
+                    dmax = round(max(result.controlpoints.list_cp),-2) + 500
+                    
+                result.othertrack_linecolor = {}
+                linecolor_default = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf']
+                color_ix = 0
+                for key in result.othertrack.data.keys():
+                    result.othertrack_linecolor[key] = {'current':linecolor_default[color_ix%10], 'default':linecolor_default[color_ix%10]}
+                    color_ix += 1
+                    
+                stnlist_tmp = []
+                for stationkey in result.station.stationkey.keys():
+                    stnlist_tmp.append(stationkey+', '+result.station.stationkey[stationkey])
+                    
+                mplot = mapplot.Mapplot(result, unitdist_default=self.default_track_interval)
                 
-            # Assign default line colors to other tracks    他軌道のラインカラーを設定   为其他轨道分配默认线条颜色
-            self.result.othertrack_linecolor = {}
-            linecolor_default = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf']
-            color_ix = 0
-            for key in self.result.othertrack.data.keys():
-                self.result.othertrack_linecolor[key] = {'current':linecolor_default[color_ix%10], 'default':linecolor_default[color_ix%10]}
-                color_ix += 1
+                self.after(0, _on_load_finish, result, dmin, dmax, tuple(stnlist_tmp), mplot, t_start)
                 
-            # Update station jump combo box    駅ジャンプメニュー更新   更新车站跳转下拉框
-            stnlist_tmp = []
-            self.stationlist_cb['values'] = ()
-            for stationkey in self.result.station.stationkey.keys():
-                stnlist_tmp.append(stationkey+', '+self.result.station.stationkey[stationkey])
-            self.stationlist_cb['values'] = tuple(stnlist_tmp)
+            def _on_load_finish(result, dmin, dmax, stnlist_tmp, mplot, t_start):
+                self.result = result
+                self.dist_range_sel.set('all')
+                self.dmin = dmin
+                self.dmax = dmax
+                self.distrange_min = dmin
+                self.distrange_max = dmax
                 
-            self.subwindow.set_ottree_value()
-            
-            self.profYlim = None
-            
-            self.mplot = mapplot.Mapplot(self.result, unitdist_default=self.default_track_interval)
-            self.setdist_all()
-            t_end = time.perf_counter()
-            print('Map loaded in {:.2f}s'.format(t_end - t_start))
-            
-            self.print_debugdata()
+                self.stationlist_cb['values'] = stnlist_tmp
+                    
+                self.subwindow.set_ottree_value()
+                
+                self.profYlim = None
+                
+                self.mplot = mplot
+                self.setdist_all()
+                t_end = time.perf_counter()
+                print('Map loaded in {:.2f}s'.format(t_end - t_start))
+                
+                self.print_debugdata()
+                
+            threading.Thread(target=_load_task, daemon=True).start()
 
     # Reloads the current map file — preserves view state, other track settings, and control point distribution; re-parses and re-renders    現在のマップファイルを再読み込み — ビュー状態、他軌道設定、制御点分布を保持し、再解析・再描画する   重新加载当前地图文件 — 保留视图状态、其他轨道设置和控制点分布，重新解析并重新渲染
     def reload_map(self, event=None):
@@ -813,58 +825,69 @@ class mainwindow(ttk.Frame):
             tmp_othertrack_cprange   = self.result.othertrack.cp_range
             
             self._clear_logs()
-            t_start = time.perf_counter()
-            interpreter = interp.ParseMap(None,self.parser)
-            self.result = interpreter.load_files(inputdir)
-            
-            
-            if(len(self.result.station.position) > 0):
-                self.distrange_min = round(min(self.result.station.position.keys()),-2) - 500
-                self.distrange_max = round(max(self.result.station.position.keys()),-2) + 500
-            else:
-                self.distrange_min = round(min(self.result.controlpoints.list_cp),-2) - 500
-                self.distrange_max = round(max(self.result.controlpoints.list_cp),-2) + 500
-
-            # self.distrange_min/max — the maximum/minimum displayable distance range for the target map    self.distrange_min/max — 対象のマップで表示可能な距離程の最大最小値を示す   self.distrange_min/max — 目标地图中可显示距离范围的最大/最小值
-            # self.dmin/dmax — the actual distance range currently plotted on screen    self.dmin/dmax — 実際に画面にプロットする距離程の範囲を示す   self.dmin/dmax — 实际在屏幕上绘制的距离范围
-                
-            # Assign default line colors to other tracks    他軌道のラインカラーを設定   为其他轨道分配默认线条颜色
-            self.result.othertrack_linecolor = {}
-            linecolor_default = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf']
-            color_ix = 0
-            for key in self.result.othertrack.data.keys():
-                self.result.othertrack_linecolor[key] = {'current':linecolor_default[color_ix%10], 'default':linecolor_default[color_ix%10]}
-                color_ix += 1
-                
-            self.subwindow.set_ottree_value()
-            
-            # Restore other track drawing settings from saved state    他軌道の描画情報を復帰   从保存状态恢复其他轨道绘图设置
-            for key in tmp_othertrack_cprange.keys():
-                if key in self.result.othertrack.data.keys():
-                    self.result.othertrack.cp_range[key] = tmp_othertrack_cprange[key]
-                    self.subwindow.othertrack_tree.set(key,'#1',tmp_othertrack_cprange[key]['min'])
-                    self.subwindow.othertrack_tree.set(key,'#2',tmp_othertrack_cprange[key]['max'])
-                    self.subwindow.othertrack_tree.tag_configure(key,foreground=tmp_othertrack_linecolor[key]['current'])
-                    self.result.othertrack_linecolor[key] = tmp_othertrack_linecolor[key]
-                    if key in tmp_othertrack_checked:
-                        self.subwindow.othertrack_tree._check_ancestor(key)
-                    
-                
-            # Update station jump combo box    駅ジャンプメニュー更新   更新车站跳转下拉框
-            stnlist_tmp = []
-            self.stationlist_cb['values'] = ()
-            for stationkey in self.result.station.stationkey.keys():
-                stnlist_tmp.append(stationkey+', '+self.result.station.stationkey[stationkey])
-            self.stationlist_cb['values'] = tuple(stnlist_tmp)
-            
             view_state = self.get_view_state()
-            self.mplot = mapplot.Mapplot(self.result,cp_arbdistribution = tmp_cp_arbdistribution)
-            self.plot_all(keep_view=True)
-            self.set_view_state(view_state)
-            t_end = time.perf_counter()
-            print('Map loaded in {:.2f}s'.format(t_end - t_start))
             
-            self.print_debugdata()
+            def _load_task():
+                t_start = time.perf_counter()
+                print('Start reloading file: '+inputdir)
+                interpreter = interp.ParseMap(None,self.parser)
+                try:
+                    result = interpreter.load_files(inputdir)
+                except Exception as e:
+                    print('Error during reload: '+str(e))
+                    return
+                
+                if(len(result.station.position) > 0):
+                    dmin = round(min(result.station.position.keys()),-2) - 500
+                    dmax = round(max(result.station.position.keys()),-2) + 500
+                else:
+                    dmin = round(min(result.controlpoints.list_cp),-2) - 500
+                    dmax = round(max(result.controlpoints.list_cp),-2) + 500
+                    
+                result.othertrack_linecolor = {}
+                linecolor_default = ['#1f77b4','#ff7f0e','#2ca02c','#d62728','#9467bd','#8c564b','#e377c2','#7f7f7f','#bcbd22','#17becf']
+                color_ix = 0
+                for key in result.othertrack.data.keys():
+                    result.othertrack_linecolor[key] = {'current':linecolor_default[color_ix%10], 'default':linecolor_default[color_ix%10]}
+                    color_ix += 1
+                
+                stnlist_tmp = []
+                for stationkey in result.station.stationkey.keys():
+                    stnlist_tmp.append(stationkey+', '+result.station.stationkey[stationkey])
+                
+                mplot = mapplot.Mapplot(result,cp_arbdistribution = tmp_cp_arbdistribution)
+                
+                self.after(0, _on_load_finish, result, dmin, dmax, tuple(stnlist_tmp), mplot, t_start)
+                
+            def _on_load_finish(result, dmin, dmax, stnlist_tmp, mplot, t_start):
+                self.result = result
+                self.distrange_min = dmin
+                self.distrange_max = dmax
+                
+                self.subwindow.set_ottree_value()
+                
+                # Restore other track drawing settings from saved state    他軌道の描画情報を復帰   从保存状态恢复其他轨道绘图设置
+                for key in tmp_othertrack_cprange.keys():
+                    if key in self.result.othertrack.data.keys():
+                        self.result.othertrack.cp_range[key] = tmp_othertrack_cprange[key]
+                        self.subwindow.othertrack_tree.set(key,'#1',tmp_othertrack_cprange[key]['min'])
+                        self.subwindow.othertrack_tree.set(key,'#2',tmp_othertrack_cprange[key]['max'])
+                        self.subwindow.othertrack_tree.tag_configure(key,foreground=tmp_othertrack_linecolor[key]['current'])
+                        self.result.othertrack_linecolor[key] = tmp_othertrack_linecolor[key]
+                        if key in tmp_othertrack_checked:
+                            self.subwindow.othertrack_tree._check_ancestor(key)
+                
+                self.stationlist_cb['values'] = stnlist_tmp
+                
+                self.mplot = mplot
+                self.plot_all(keep_view=True)
+                self.set_view_state(view_state)
+                t_end = time.perf_counter()
+                print('Map loaded in {:.2f}s'.format(t_end - t_start))
+                
+                self.print_debugdata()
+                
+            threading.Thread(target=_load_task, daemon=True).start()
 
     # Renders the plan (2D top-down) view — draws own track, other tracks, stations, speed limits, curve sections, and optional background image    平面（2Dトップダウン）ビューを描画 — 自軌道、他軌道、駅、速度制限、曲線区間、オプションの背景画像を描画する   渲染平面（2D俯视）视图 — 绘制自身轨道、其他轨道、车站、速度限制、曲线区间和可选的背景图像
     def draw_planerplot(self):
