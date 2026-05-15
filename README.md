@@ -69,8 +69,8 @@ Between any two adjacent control points, Kobushi evaluates:
 
 ### 2.1 System Requirements
 
-- **Python** 3.6 or later
-- **OS**: Windows / macOS / Linux (requires a tkinter-capable graphical environment)
+- **Python** 3.9 or later
+- **OS**: Windows / macOS / Linux with a Qt-capable graphical environment
 
 ### 2.2 Installation
 
@@ -469,7 +469,7 @@ python -O -m kobushiM
    - Other-track key list
    - Other-track coordinate data
 
-2. **Exception debugging**: Whenever an exception occurs at runtime, Python's **pdb** (Python Debugger) is launched automatically for post-mortem debugging.
+2. **Exception reporting**: Unhandled runtime exceptions are routed through Qt's global exception hook and shown in a critical message dialog.
 
 > **Note**: Printing large datasets for extensive map files may take considerable time.
 

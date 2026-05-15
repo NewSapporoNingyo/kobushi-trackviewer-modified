@@ -16,13 +16,197 @@
 
 import math
 import numpy as np
-import tkinter as tk
-from tkinter import ttk
+
+from PyQt6 import QtCore, QtGui, QtWidgets
+import pyqtgraph as pg
+import pyqtgraph.exporters
 
 
-class PlotCanvas(ttk.Frame):
-    def __init__(self, master, title='', rotate_enabled=True, y_axis_down=False, world_grid=False, x_unit='', y_unit='', independent_scale=False, scalebar=False, lock_y_center=False, zoom_x_by_default=False, enable_lod=True):
-        super().__init__(master, padding=0)
+pg.setConfigOptions(antialias=True, imageAxisOrder='row-major')
+
+
+class _CanvasEvent:
+    def __init__(self, qevent, widget):
+        pos = qevent.position()
+        self.x = float(pos.x())
+        self.y = float(pos.y())
+        self.widget = widget
+
+
+class _CanvasCompat:
+    """Small Tk Canvas compatibility layer for code that draws screen overlays."""
+
+    def __init__(self, owner):
+        self.owner = owner
+        self._overlay_items = {}
+
+    def bind(self, event_name, callback):
+        self.owner._canvas_bindings[event_name] = callback
+        self.owner.viewport().setMouseTracking('<Motion>' in self.owner._canvas_bindings)
+
+    def unbind(self, event_name):
+        self.owner._canvas_bindings.pop(event_name, None)
+        self.owner.viewport().setMouseTracking('<Motion>' in self.owner._canvas_bindings)
+
+    def winfo_width(self):
+        return max(1, self.owner.viewport().width())
+
+    def winfo_height(self):
+        return max(1, self.owner.viewport().height())
+
+    def config(self, **kwargs):
+        if 'cursor' in kwargs:
+            self.owner.set_cursor(kwargs['cursor'])
+
+    configure = config
+
+    def _screen_to_scene(self, x, y):
+        return self.owner.mapToScene(QtCore.QPoint(int(round(x)), int(round(y))))
+
+    def _register_overlay(self, item):
+        item.setZValue(100000)
+        self.owner.scene().addItem(item)
+        item_id = id(item)
+        self._overlay_items[item_id] = item
+        return item_id
+
+    def create_line(self, *coords, fill=None, width=1, **kwargs):
+        if len(coords) == 1 and isinstance(coords[0], (list, tuple)):
+            coords = tuple(coords[0])
+        if len(coords) < 4:
+            return None
+        path = QtGui.QPainterPath(self._screen_to_scene(coords[0], coords[1]))
+        for ix in range(2, len(coords) - 1, 2):
+            path.lineTo(self._screen_to_scene(coords[ix], coords[ix + 1]))
+        item = QtWidgets.QGraphicsPathItem(path)
+        pen = QtGui.QPen(pg.mkColor(fill or self.owner.line_color))
+        pen.setWidthF(float(width))
+        pen.setCosmetic(True)
+        pen.setCapStyle(QtCore.Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(QtCore.Qt.PenJoinStyle.RoundJoin)
+        item.setPen(pen)
+        return self._register_overlay(item)
+
+    def create_text(self, x, y, text='', fill=None, font=None, anchor='nw', **kwargs):
+        item = QtWidgets.QGraphicsSimpleTextItem(str(text))
+        qfont = QtGui.QFont(self.owner.font_family, 9)
+        if isinstance(font, (list, tuple)):
+            if len(font) > 0:
+                qfont.setFamily(str(font[0]))
+            if len(font) > 1:
+                try:
+                    qfont.setPointSize(int(font[1]))
+                except Exception:
+                    pass
+            if len(font) > 2 and 'bold' in str(font[2]).lower():
+                qfont.setBold(True)
+        item.setFont(qfont)
+        item.setBrush(QtGui.QBrush(pg.mkColor(fill or self.owner.text_color)))
+        pos = self._screen_to_scene(x, y)
+        item.setPos(pos)
+        rect = item.boundingRect()
+        dx = 0.0
+        dy = 0.0
+        anchor = anchor or 'nw'
+        if 'e' in anchor:
+            dx = -rect.width()
+        elif 'w' not in anchor:
+            dx = -rect.width() / 2.0
+        if 's' in anchor:
+            dy = -rect.height()
+        elif 'n' not in anchor:
+            dy = -rect.height() / 2.0
+        item.moveBy(dx, dy)
+        return self._register_overlay(item)
+
+    def create_oval(self, x1, y1, x2, y2, outline=None, fill=None, width=1, **kwargs):
+        p1 = self._screen_to_scene(x1, y1)
+        p2 = self._screen_to_scene(x2, y2)
+        rect = QtCore.QRectF(p1, p2).normalized()
+        item = QtWidgets.QGraphicsEllipseItem(rect)
+        pen = QtGui.QPen(pg.mkColor(outline or self.owner.line_color))
+        pen.setWidthF(float(width))
+        pen.setCosmetic(True)
+        item.setPen(pen)
+        if fill:
+            item.setBrush(QtGui.QBrush(pg.mkColor(fill)))
+        return self._register_overlay(item)
+
+    def create_image(self, *args, **kwargs):
+        return None
+
+    def move(self, *args, **kwargs):
+        return None
+
+    def tag_lower(self, *args, **kwargs):
+        return None
+
+    def delete(self, item_id):
+        if item_id == 'all':
+            self.clear_overlays()
+            return
+        item = self._overlay_items.pop(item_id, None)
+        if item is not None and item.scene() is not None:
+            item.scene().removeItem(item)
+
+    def clear_overlays(self):
+        for item in list(self._overlay_items.values()):
+            if item.scene() is not None:
+                item.scene().removeItem(item)
+        self._overlay_items.clear()
+
+    def postscript(self, file=None, **kwargs):
+        if file:
+            self.owner.export_image(file)
+
+
+class _TrackViewBox(pg.ViewBox):
+    def __init__(self, *args, **kwargs):
+        self.owner = None
+        super().__init__(*args, **kwargs)
+
+    def mouseDragEvent(self, ev, axis=None):
+        owner = self.owner
+        if owner is not None and not owner.interactive:
+            ev.ignore()
+            return
+        if (
+            owner is not None
+            and owner.rotate_enabled
+            and ev.button() == QtCore.Qt.MouseButton.RightButton
+        ):
+            center = self.sceneBoundingRect().center()
+            p0 = ev.lastScenePos()
+            p1 = ev.scenePos()
+            a0 = math.atan2(p0.y() - center.y(), p0.x() - center.x())
+            a1 = math.atan2(p1.y() - center.y(), p1.x() - center.x())
+            owner.rotation += a1 - a0
+            owner.redraw()
+            ev.accept()
+            return
+        super().mouseDragEvent(ev, axis=axis)
+
+
+class PlotCanvas(pg.PlotWidget):
+    def __init__(
+        self,
+        master=None,
+        title='',
+        rotate_enabled=True,
+        y_axis_down=False,
+        world_grid=False,
+        x_unit='',
+        y_unit='',
+        independent_scale=False,
+        scalebar=False,
+        lock_y_center=False,
+        zoom_x_by_default=False,
+        enable_lod=True,
+    ):
+        self._viewbox = _TrackViewBox()
+        super().__init__(parent=master, viewBox=self._viewbox, background='#000000')
+        self._viewbox.owner = self
+
         self.title = title
         self.rotate_enabled = rotate_enabled
         self.y_axis_down = y_axis_down
@@ -35,13 +219,13 @@ class PlotCanvas(ttk.Frame):
         self.zoom_x_by_default = zoom_x_by_default
         self.enable_lod = enable_lod
         self.grid_mode = 'fixed'
-        self.interactive = True
+        self._interactive = True
         self._view_fitted = False
         self.background = '#000000'
         self.grid_color = '#333333'
         self.line_color = '#ffffff'
         self.text_color = '#ffffff'
-        self.font_family = 'TkDefaultFont'
+        self.font_family = 'Sans Serif'
         self.center = [0.0, 0.0]
         self.scale = 1.0
         self.scale_x = 1.0
@@ -49,26 +233,59 @@ class PlotCanvas(ttk.Frame):
         self.rotation = 0.0
         self.bounds = None
         self.renderer = None
-        self._last_drag = None
-        self._last_rotate = None
-        self._zoom_debounce_id = None
-        self._pan_deferred = False
+        self._in_redraw = False
+        self._canvas_bindings = {}
+        self.canvas = _CanvasCompat(self)
 
-        self.canvas = tk.Canvas(self, bg=self.background, highlightthickness=0)
-        self.canvas.grid(row=0, column=0, sticky=(tk.N, tk.W, tk.E, tk.S))
-        self.columnconfigure(0, weight=1)
-        self.rowconfigure(0, weight=1)
-
-        self.canvas.bind('<Configure>', self._on_resize)
-        self.canvas.bind('<MouseWheel>', self._on_mousewheel)
-        self.canvas.bind('<Shift-MouseWheel>', self._on_shift_mousewheel)
-        self.canvas.bind('<Control-MouseWheel>', self._on_control_mousewheel)
-        self.canvas.bind('<ButtonPress-1>', self._start_pan)
-        self.canvas.bind('<B1-Motion>', self._pan)
-        self.canvas.bind('<ButtonRelease-1>', self._stop_pan)
-        self.canvas.bind('<ButtonPress-3>', self._start_rotate)
-        self.canvas.bind('<B3-Motion>', self._rotate_drag)
+        self.plotItem.hideButtons()
+        self.plotItem.setMenuEnabled(False)
+        self.getViewBox().invertY(self.y_axis_down)
+        self._apply_mouse_enabled()
+        self._set_axis_labels()
         self.canvas.bind('<Double-Button-1>', self.fit)
+
+        self._redraw_timer = QtCore.QTimer(self)
+        self._redraw_timer.setSingleShot(True)
+        self._redraw_timer.timeout.connect(self.redraw)
+        self._viewbox.sigRangeChanged.connect(self._on_range_changed)
+        self.viewport().installEventFilter(self)
+
+    @property
+    def interactive(self):
+        return self._interactive
+
+    @interactive.setter
+    def interactive(self, value):
+        self._interactive = bool(value)
+        self._apply_mouse_enabled()
+
+    def _apply_mouse_enabled(self):
+        if hasattr(self, '_viewbox'):
+            self._viewbox.setMouseEnabled(
+                x=self._interactive,
+                y=self._interactive and not self.lock_y_center,
+            )
+
+    def _set_axis_labels(self):
+        if self.x_unit:
+            self.setLabel('bottom', units=self.x_unit)
+        if self.y_unit:
+            self.setLabel('left', units=self.y_unit)
+
+    def eventFilter(self, obj, event):
+        if obj is self.viewport():
+            event_type = event.type()
+            if event_type == QtCore.QEvent.Type.MouseMove:
+                callback = self._canvas_bindings.get('<Motion>')
+                if callback is not None:
+                    callback(_CanvasEvent(event, self.canvas))
+            elif event_type == QtCore.QEvent.Type.MouseButtonDblClick:
+                if event.button() == QtCore.Qt.MouseButton.LeftButton:
+                    callback = self._canvas_bindings.get('<Double-Button-1>')
+                    if callback is not None:
+                        result = callback(_CanvasEvent(event, self.canvas))
+                        return result == 'break'
+        return super().eventFilter(obj, event)
 
     def set_renderer(self, renderer, bounds=None, keep_view=True):
         self.renderer = renderer
@@ -80,18 +297,19 @@ class PlotCanvas(ttk.Frame):
             self.redraw()
 
     def fit(self, event=None):
-        if not self.interactive:
+        if not self.interactive and event is not None:
             return
         if self.bounds is not None:
             xmin, ymin, xmax, ymax = self.bounds
-            width = max(1, self.canvas.winfo_width())
-            height = max(1, self.canvas.winfo_height())
-            dx = max(xmax - xmin, 1e-6)
-            dy = max(ymax - ymin, 1e-6)
-            self.center = [(xmin + xmax) / 2, (ymin + ymax) / 2]
-            self.scale = min(width / dx, height / dy) * 0.88
-            self.scale_x = width / dx * 0.88
-            self.scale_y = height / dy * 0.88
+            if self.lock_y_center:
+                half = max(abs(ymin), abs(ymax), 1.0)
+                ymin, ymax = -half, half
+            if abs(xmax - xmin) < 1e-9:
+                xmax = xmin + 1.0
+            if abs(ymax - ymin) < 1e-9:
+                ymax = ymin + 1.0
+            self._viewbox.setRange(xRange=(xmin, xmax), yRange=(ymin, ymax), padding=0.06)
+            self._sync_view_metrics()
         self._view_fitted = True
         self.redraw()
 
@@ -100,7 +318,7 @@ class PlotCanvas(ttk.Frame):
         self.redraw()
 
     def set_font(self, family):
-        self.font_family = family
+        self.font_family = family or 'Sans Serif'
         self.redraw()
 
     def get_view_state(self):
@@ -110,19 +328,37 @@ class PlotCanvas(ttk.Frame):
             'scale_x': self.scale_x,
             'scale_y': self.scale_y,
             'rotation': self.rotation,
+            'view_range': self.viewRange(),
         }
 
     def set_view_state(self, state):
         if state is None:
             return
-        self.center = state['center'].copy()
-        self.scale = state['scale']
-        self.scale_x = state['scale_x']
-        self.scale_y = state['scale_y']
-        self.rotation = state['rotation']
-        if self.lock_y_center:
-            self.center[1] = 0
+        self.center = state.get('center', self.center).copy()
+        self.scale = state.get('scale', self.scale)
+        self.scale_x = state.get('scale_x', self.scale_x)
+        self.scale_y = state.get('scale_y', self.scale_y)
+        self.rotation = state.get('rotation', self.rotation)
+        view_range = state.get('view_range')
+        if view_range is not None:
+            self._viewbox.setRange(xRange=view_range[0], yRange=view_range[1], padding=0)
         self._view_fitted = True
+        self.redraw()
+
+    def set_center(self, x=None, y=None):
+        xr, yr = self.viewRange()
+        xspan = max(abs(xr[1] - xr[0]), 1e-9)
+        yspan = max(abs(yr[1] - yr[0]), 1e-9)
+        cx = self.center[0] if x is None else float(x)
+        cy = self.center[1] if y is None else float(y)
+        if self.lock_y_center:
+            cy = 0.0
+        self._viewbox.setRange(
+            xRange=(cx - xspan / 2.0, cx + xspan / 2.0),
+            yRange=(cy - yspan / 2.0, cy + yspan / 2.0),
+            padding=0,
+        )
+        self._sync_view_metrics()
         self.redraw()
 
     def set_grid_mode(self, mode):
@@ -130,86 +366,100 @@ class PlotCanvas(ttk.Frame):
         self.redraw()
 
     def redraw(self):
-        if self._zoom_debounce_id is not None:
-            self.after_cancel(self._zoom_debounce_id)
-        self._zoom_debounce_id = None
-        self._pan_deferred = False
-        self.canvas.delete('all')
-        self._draw_grid()
-        if self.title:
-            self.canvas.create_text(
-                8, 8, anchor='nw', text=self.title,
-                fill=self.text_color, font=(self.font_family, 9, 'bold'),
-                tags=('fixed',))
-        if self.renderer is not None:
-            self.renderer(self)
-        if self.scalebar:
-            self._draw_scalebar()
+        if self._in_redraw:
+            return
+        self._in_redraw = True
+        try:
+            self._redraw_timer.stop()
+            self.getPlotItem().clear()
+            self.canvas.clear_overlays()
+            self.showGrid(x=self.grid_mode != 'none', y=self.grid_mode != 'none', alpha=0.3)
+            self.getPlotItem().setTitle(self.title, color=self.text_color, size='9pt')
+            if self.renderer is not None:
+                self.renderer(self)
+            if self.scalebar:
+                self._draw_scalebar()
+        finally:
+            self._in_redraw = False
 
-    def world_to_screen(self, x, y):
-        dx = x - self.center[0]
-        dy = y - self.center[1]
-        c = math.cos(self.rotation)
-        s = math.sin(self.rotation)
-        rx = c * dx - s * dy
-        ry = s * dx + c * dy
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        screen_y_sign = 1 if self.y_axis_down else -1
-        sx_scale, sy_scale = self._scales()
-        return width / 2 + rx * sx_scale, height / 2 + screen_y_sign * ry * sy_scale
+    def _sync_view_metrics(self):
+        xr, yr = self.viewRange()
+        xmin, xmax = min(xr), max(xr)
+        ymin, ymax = min(yr), max(yr)
+        self.center = [(xmin + xmax) / 2.0, (ymin + ymax) / 2.0]
+        if self.lock_y_center:
+            self.center[1] = 0.0
+        dx = max(xmax - xmin, 1e-9)
+        dy = max(ymax - ymin, 1e-9)
+        self.scale_x = max(1, self.canvas.winfo_width()) / dx
+        self.scale_y = max(1, self.canvas.winfo_height()) / dy
+        self.scale = min(self.scale_x, self.scale_y)
 
-    def screen_to_world_delta(self, dx, dy):
-        c = math.cos(self.rotation)
-        s = math.sin(self.rotation)
-        screen_y_sign = 1 if self.y_axis_down else -1
-        sx_scale, sy_scale = self._scales()
-        wx = -(c * dx / sx_scale + screen_y_sign * s * dy / sy_scale)
-        wy = (s * dx / sx_scale - screen_y_sign * c * dy / sy_scale)
-        return wx, wy
-
-    def screen_to_world(self, sx, sy):
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        sx_scale, sy_scale = self._scales()
-        rx = (sx - width / 2) / sx_scale
-        screen_y_sign = 1 if self.y_axis_down else -1
-        ry = (sy - height / 2) / (screen_y_sign * sy_scale)
-        c = math.cos(self.rotation)
-        s = math.sin(self.rotation)
-        x = c * rx + s * ry + self.center[0]
-        y = -s * rx + c * ry + self.center[1]
-        return x, y
+    def _on_range_changed(self, *args):
+        self._sync_view_metrics()
+        if not self._in_redraw and self.renderer is not None:
+            self._redraw_timer.start(35)
 
     def _scales(self):
         if self.independent_scale:
             return self.scale_x, self.scale_y
         return self.scale, self.scale
 
-    def _world_to_screen_batch(self, points_np):
-        if points_np.size == 0:
-            return []
+    def _world_to_display_point(self, x, y):
+        if self.rotation == 0:
+            return float(x), float(y)
+        cx, cy = self.center
+        dx = float(x) - cx
+        dy = float(y) - cy
+        c = math.cos(self.rotation)
+        s = math.sin(self.rotation)
+        return cx + c * dx - s * dy, cy + s * dx + c * dy
+
+    def _display_to_world_point(self, x, y):
+        if self.rotation == 0:
+            return float(x), float(y)
+        cx, cy = self.center
+        dx = float(x) - cx
+        dy = float(y) - cy
+        c = math.cos(self.rotation)
+        s = math.sin(self.rotation)
+        return cx + c * dx + s * dy, cy - s * dx + c * dy
+
+    def _world_to_display_batch(self, points_np):
+        pts = np.asarray(points_np, dtype=np.float64)
+        if pts.size == 0 or self.rotation == 0:
+            return pts
         cx, cy = self.center
         c = math.cos(self.rotation)
         s = math.sin(self.rotation)
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        screen_y_sign = 1 if self.y_axis_down else -1
-        sx_scale, sy_scale = self._scales()
-        dx = points_np[:, 0] - cx
-        dy = points_np[:, 1] - cy
-        rx = c * dx - s * dy
-        ry = s * dx + c * dy
-        sx = width / 2 + rx * sx_scale
-        sy = height / 2 + screen_y_sign * ry * sy_scale
-        coords = np.empty(sx.size + sy.size, dtype=np.float64)
-        coords[0::2] = sx
-        coords[1::2] = sy
-        return coords.tolist()
+        out = pts.copy()
+        dx = pts[:, 0] - cx
+        dy = pts[:, 1] - cy
+        out[:, 0] = cx + c * dx - s * dy
+        out[:, 1] = cy + s * dx + c * dy
+        return out
+
+    def world_to_screen(self, x, y):
+        dx, dy = self._world_to_display_point(x, y)
+        scene_pos = self._viewbox.mapViewToScene(QtCore.QPointF(dx, dy))
+        view_pos = self.mapFromScene(scene_pos)
+        return float(view_pos.x()), float(view_pos.y())
+
+    def screen_to_world_delta(self, dx, dy):
+        cx = self.canvas.winfo_width() / 2.0
+        cy = self.canvas.winfo_height() / 2.0
+        x0, y0 = self.screen_to_world(cx, cy)
+        x1, y1 = self.screen_to_world(cx + dx, cy + dy)
+        return x0 - x1, y1 - y0
+
+    def screen_to_world(self, sx, sy):
+        scene_pos = self.mapToScene(QtCore.QPoint(int(round(sx)), int(round(sy))))
+        view_pos = self._viewbox.mapSceneToView(scene_pos)
+        return self._display_to_world_point(view_pos.x(), view_pos.y())
 
     def _get_visible_world_bounds(self, margin=0.35):
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
         corners = [
             self.screen_to_world(0, 0),
             self.screen_to_world(width, 0),
@@ -231,76 +481,31 @@ class PlotCanvas(ttk.Frame):
         effective_scale = min(sx_scale, sy_scale)
         if effective_scale >= 0.5:
             return 1
-        elif effective_scale >= 0.1:
+        if effective_scale >= 0.1:
             return 2
-        elif effective_scale >= 0.01:
+        if effective_scale >= 0.01:
             return 5
-        else:
-            return 10
+        return 10
 
-    def line(self, points, fill=None, width=1):
-        pts = np.asarray(points)
+    def line(self, points, fill=None, width=1, tags=None):
+        pts = np.asarray(points, dtype=np.float64)
         if pts.size == 0 or len(pts) < 2:
-            return
-            
-        # 1. 获取屏幕视窗的世界坐标边界
-        xmin, ymin, xmax, ymax = self._get_visible_world_bounds()
-        
-        # 2. 找出当前视口范围内的点的掩码与索引
-        mask = (pts[:, 0] >= xmin) & (pts[:, 0] <= xmax) & \
-               (pts[:, 1] >= ymin) & (pts[:, 1] <= ymax)
-        visible_idx = np.where(mask)[0]
-        
-        # 注意：这里将原先的 < 2 改为了 == 0
-        # 因为如果屏幕内仅有1个点，加上向外扩展的2个点，共有3个点，也足以构成穿越角落的线段
-        if len(visible_idx) == 0:
-            return
-            
-        # === 核心修复区 ===
-        # 3. 寻找不连续的区段（即跳跃的索引）。差值大于1代表线路曾经离开过屏幕
-        breaks = np.where(np.diff(visible_idx) > 1)[0] + 1
-        segments = np.split(visible_idx, breaks)
-        
-        stride = self._get_lod_stride()
-        
-        # 4. 分段渲染线段，避免将两个不相连的屏幕内线段跨屏直连
-        for seg in segments:
-            if len(seg) == 0:
-                continue
-                
-            # 向前后各扩展1个点的索引，防止线段在屏幕边缘断开（等同于原版的 extended_mask 逻辑）
-            start_idx = max(0, seg[0] - 1)
-            end_idx = min(len(pts) - 1, seg[-1] + 1)
-            
-            # 使用切片获取当前连续线段的数据点（切片右侧为开区间所以要 +1）
-            segment_pts = pts[start_idx : end_idx + 1]
-            
-            # 应用 Level of Detail (LOD) 降低远视角的渲染开销
-            if stride > 1:
-                segment_pts = segment_pts[::stride]
-                
-            # 提取的线段点数需满足绘制要求
-            if len(segment_pts) < 2:
-                continue
-                
-            # 转换为屏幕坐标并批量渲染
-            coords = self._world_to_screen_batch(segment_pts)
-            if len(coords) >= 4:
-                self.canvas.create_line(
-                    *coords, fill=fill or self.line_color, width=width,
-                    capstyle=tk.ROUND, joinstyle=tk.ROUND)
-                    
+            return None
+        pts = pts.reshape((-1, 2))
+        pts = self._world_to_display_batch(pts)
+        pen = pg.mkPen(pg.mkColor(fill or self.line_color), width=width)
+        item = pg.PlotDataItem(pts[:, 0], pts[:, 1], pen=pen, connect='finite')
+        self.plotItem.addItem(item)
+        return item
+
     def line_screen(self, coords, fill=None, width=1):
-        if len(coords) >= 4:
-            self.canvas.create_line(
-                *coords, fill=fill or self.line_color, width=width,
-                capstyle=tk.ROUND, joinstyle=tk.ROUND)
+        return self.canvas.create_line(*coords, fill=fill or self.line_color, width=width)
 
     def get_view_params(self):
         sx_scale, sy_scale = self._scales()
         return {
-            'width': max(1, self.canvas.winfo_width()),
-            'height': max(1, self.canvas.winfo_height()),
+            'width': self.canvas.winfo_width(),
+            'height': self.canvas.winfo_height(),
             'center': self.center.copy(),
             'rotation': self.rotation,
             'sx_scale': sx_scale,
@@ -334,119 +539,63 @@ class PlotCanvas(ttk.Frame):
         return coords.tolist()
 
     def point(self, x, y, radius=3, outline=None, fill=None):
-        sx, sy = self.world_to_screen(x, y)
-        self.canvas.create_oval(
-            sx - radius, sy - radius, sx + radius, sy + radius,
-            outline=outline or self.line_color, fill=fill or self.background)
+        dx, dy = self._world_to_display_point(x, y)
+        item = pg.ScatterPlotItem(
+            [dx],
+            [dy],
+            size=radius * 2,
+            pen=pg.mkPen(pg.mkColor(outline or self.line_color), width=1),
+            brush=pg.mkBrush(pg.mkColor(fill or self.background)),
+        )
+        self.plotItem.addItem(item)
+        return item
 
     def text(self, x, y, text, anchor='nw', angle=0, offset=(6, -6), font_size=9, fill=None):
         sx, sy = self.world_to_screen(x, y)
-        kwargs = {
-            'anchor': anchor,
-            'text': text,
-            'fill': fill or self.text_color,
-            'font': (self.font_family, font_size),
+        wx, wy = self.screen_to_world(sx + offset[0], sy + offset[1])
+        dx, dy = self._world_to_display_point(wx, wy)
+        anchor_map = {
+            'nw': (0, 0),
+            'n': (0.5, 0),
+            'ne': (1, 0),
+            'w': (0, 0.5),
+            'center': (0.5, 0.5),
+            'e': (1, 0.5),
+            'sw': (0, 1),
+            's': (0.5, 1),
+            'se': (1, 1),
         }
+        item = pg.TextItem(
+            text=str(text),
+            color=pg.mkColor(fill or self.text_color),
+            anchor=anchor_map.get(anchor, (0, 0)),
+            angle=angle,
+        )
+        qfont = QtGui.QFont(self.font_family, int(font_size))
         try:
-            kwargs['angle'] = angle
-            self.canvas.create_text(sx + offset[0], sy + offset[1], **kwargs)
-        except tk.TclError:
-            kwargs.pop('angle', None)
-            self.canvas.create_text(sx + offset[0], sy + offset[1], **kwargs)
+            item.setFont(qfont)
+        except AttributeError:
+            item.textItem.setFont(qfont)
+        item.setPos(dx, dy)
+        self.plotItem.addItem(item)
+        return item
 
-    def _draw_grid(self):
-        if self.grid_mode == 'none':
-            return
-        if self.grid_mode == 'movable':
-            self._draw_world_grid_square()
-            return
-        if self.world_grid:
-            self._draw_world_grid()
-            return
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        spacing = 80
-        for x in range(0, width + spacing, spacing):
-            self.canvas.create_line(x, 0, x, height, fill=self.grid_color, tags=('fixed',))
-        for y in range(0, height + spacing, spacing):
-            self.canvas.create_line(0, y, width, y, fill=self.grid_color, tags=('fixed',))
-
-    def _draw_world_grid_square(self):
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        corners = [
-            self.screen_to_world(0, 0),
-            self.screen_to_world(width, 0),
-            self.screen_to_world(0, height),
-            self.screen_to_world(width, height),
-        ]
-        xmin = min(point[0] for point in corners)
-        xmax = max(point[0] for point in corners)
-        ymin = min(point[1] for point in corners)
-        ymax = max(point[1] for point in corners)
-        step = self._grid_step(max(xmax - xmin, ymax - ymin))
-        x0 = math.floor(xmin / step) * step
-        y0 = math.floor(ymin / step) * step
-        x = x0
-        while x <= xmax + step:
-            p1 = self.world_to_screen(x, ymin)
-            p2 = self.world_to_screen(x, ymax)
-            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            x += step
-        y = y0
-        while y <= ymax + step:
-            p1 = self.world_to_screen(xmin, y)
-            p2 = self.world_to_screen(xmax, y)
-            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            y += step
-
-    def _draw_world_grid(self):
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        corners = [
-            self.screen_to_world(0, 0),
-            self.screen_to_world(width, 0),
-            self.screen_to_world(0, height),
-            self.screen_to_world(width, height),
-        ]
-        xmin = min(point[0] for point in corners)
-        xmax = max(point[0] for point in corners)
-        ymin = min(point[1] for point in corners)
-        ymax = max(point[1] for point in corners)
-        xspan = max(xmax - xmin, 1e-6)
-        yspan = max(ymax - ymin, 1e-6)
-        xmin -= xspan * 0.35
-        xmax += xspan * 0.35
-        ymin -= yspan * 0.35
-        ymax += yspan * 0.35
-        xstep = self._grid_step(xmax - xmin)
-        ystep = self._grid_step(ymax - ymin)
-        x0 = math.floor(xmin / xstep) * xstep
-        y0 = math.floor(ymin / ystep) * ystep
-        x = x0
-        while x <= xmax + xstep:
-            p1 = self.world_to_screen(x, ymin)
-            p2 = self.world_to_screen(x, ymax)
-            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            if p1[0] >= -60 and p1[0] <= width + 60:
-                self.canvas.create_text(
-                    p1[0] + 3, height - 16, anchor='sw',
-                    text=self._format_grid_label(x, self.x_unit),
-                    fill='#888888', font=(self.font_family, 8),
-                    tags=('fixed_y',))
-            x += xstep
-        y = y0
-        while y <= ymax + ystep:
-            p1 = self.world_to_screen(xmin, y)
-            p2 = self.world_to_screen(xmax, y)
-            self.canvas.create_line(p1[0], p1[1], p2[0], p2[1], fill=self.grid_color)
-            if p1[1] >= -20 and p1[1] <= height + 20:
-                self.canvas.create_text(
-                    6, p1[1] - 2, anchor='sw',
-                    text=self._format_grid_label(y, self.y_unit),
-                    fill='#888888', font=(self.font_family, 8),
-                    tags=('fixed_x',))
-            y += ystep
+    def image(self, image_array, x, y, width, height, rotation=0.0, opacity=1.0):
+        arr = np.ascontiguousarray(image_array)
+        if arr.size == 0:
+            return None
+        item = pg.ImageItem(arr)
+        item.setOpacity(opacity)
+        item.setZValue(-1000)
+        img_h, img_w = arr.shape[:2]
+        transform = QtGui.QTransform()
+        transform.translate(float(x), float(y))
+        transform.rotate(float(rotation))
+        transform.scale(float(width) / max(1, img_w), float(height) / max(1, img_h))
+        transform.translate(-img_w / 2.0, -img_h / 2.0)
+        item.setTransform(transform)
+        self.plotItem.addItem(item)
+        return item
 
     def _grid_step(self, span):
         raw = max(span / 8, 1e-9)
@@ -457,36 +606,15 @@ class PlotCanvas(ttk.Frame):
                 return step
         return 10 * magnitude
 
-    def _format_grid_label(self, value, unit):
-        if abs(value) >= 100:
-            label = '{:.0f}'.format(value)
-        elif abs(value) >= 10:
-            label = '{:.1f}'.format(value).rstrip('0').rstrip('.')
-        else:
-            label = '{:.2f}'.format(value).rstrip('0').rstrip('.')
-        return label + (unit if unit else '')
-
-    def _draw_scalebar(self):
-        sx_scale, sy_scale = self._scales()
-        if sx_scale <= 0:
-            return
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        target_px = min(max(width * 0.18, 90), 180)
-        raw_length = target_px / sx_scale
-        length = self._friendly_scalebar_length(raw_length)
-        bar_px = length * sx_scale
-        margin = 24
-        x2 = width - margin
-        x1 = x2 - bar_px
-        y = height - margin
-        tick = 10
-        self.canvas.create_line(x1, y - tick, x1, y, x2, y, x2, y - tick, fill=self.text_color, width=2, tags=('fixed',))
-        self.canvas.create_text(
-            (x1 + x2) / 2, y - tick - 4,
-            text=self._format_scalebar_label(length),
-            fill=self.text_color, font=(self.font_family, 9),
-            anchor='s', tags=('fixed',))
+    def _format_scalebar_label(self, length):
+        if length >= 1000:
+            km = length / 1000
+            if abs(km - round(km)) < 1e-9:
+                return '{:.0f}km'.format(km)
+            return '{:.1f}km'.format(km).rstrip('0').rstrip('.')
+        if abs(length - round(length)) < 1e-9:
+            return '{:.0f}m'.format(length)
+        return '{:.1f}m'.format(length).rstrip('0').rstrip('.')
 
     def _friendly_scalebar_length(self, raw_length):
         if raw_length <= 0:
@@ -500,116 +628,38 @@ class PlotCanvas(ttk.Frame):
         candidates = sorted(value for value in candidates if value > 0)
         return min(candidates, key=lambda value: abs(value - raw_length))
 
-    def _format_scalebar_label(self, length):
-        if length >= 1000:
-            km = length / 1000
-            if abs(km - round(km)) < 1e-9:
-                return '{:.0f}km'.format(km)
-            return '{:.1f}km'.format(km).rstrip('0').rstrip('.')
-        if abs(length - round(length)) < 1e-9:
-            return '{:.0f}m'.format(length)
-        return '{:.1f}m'.format(length).rstrip('0').rstrip('.')
+    def _draw_scalebar(self):
+        sx_scale, _ = self._scales()
+        if sx_scale <= 0:
+            return
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
+        target_px = min(max(width * 0.18, 90), 180)
+        length = self._friendly_scalebar_length(target_px / sx_scale)
+        bar_px = length * sx_scale
+        margin = 24
+        x2 = width - margin
+        x1 = x2 - bar_px
+        y = height - margin
+        tick = 10
+        self.canvas.create_line(x1, y - tick, x1, y, x2, y, x2, y - tick, fill=self.text_color, width=2)
+        self.canvas.create_text(
+            (x1 + x2) / 2,
+            y - tick - 4,
+            text=self._format_scalebar_label(length),
+            fill=self.text_color,
+            font=(self.font_family, 9),
+            anchor='s',
+        )
 
     def set_cursor(self, name):
-        self.canvas.config(cursor=name)
-
-    def _on_resize(self, event=None):
-        self.redraw()
-
-    def _on_mousewheel(self, event):
-        if not self.interactive:
-            return
-        factor = 1.15 if event.delta > 0 else 1 / 1.15
-        self._zoom(factor, axis='x' if self.zoom_x_by_default else 'both')
-        self._schedule_redraw()
-
-    def _on_shift_mousewheel(self, event):
-        if not self.interactive:
-            return
-        if self.independent_scale:
-            factor = 1.15 if event.delta > 0 else 1 / 1.15
-            self._zoom(factor, axis='y')
-            self._schedule_redraw()
-            return
-        if self.rotate_enabled:
-            self.rotation += math.radians(5 if event.delta > 0 else -5)
-            self._schedule_redraw()
-
-    def _on_control_mousewheel(self, event):
-        if not self.interactive:
-            return
-        if self.independent_scale:
-            factor = 1.15 if event.delta > 0 else 1 / 1.15
-            self._zoom(factor, axis='both' if self.zoom_x_by_default else 'x')
-            self._schedule_redraw()
-
-    def _zoom(self, factor, axis='both'):
-        self._view_fitted = True
-        if self.independent_scale:
-            if axis in ['both', 'x']:
-                self.scale_x = max(0.001, min(self.scale_x * factor, 10000))
-            if axis in ['both', 'y']:
-                self.scale_y = max(0.001, min(self.scale_y * factor, 10000))
+        if name == 'crosshair':
+            self.setCursor(QtCore.Qt.CursorShape.CrossCursor)
+        elif name:
+            self.setCursor(QtCore.Qt.CursorShape.ArrowCursor)
         else:
-            self.scale = max(0.001, min(self.scale * factor, 10000))
+            self.unsetCursor()
 
-    def _schedule_redraw(self):
-        if self._zoom_debounce_id is not None:
-            self.after_cancel(self._zoom_debounce_id)
-        self._zoom_debounce_id = self.after(50, self._debounced_redraw)
-
-    def _debounced_redraw(self):
-        self._zoom_debounce_id = None
-        self.redraw()
-
-    def _start_pan(self, event):
-        if not self.interactive:
-            return
-        self._last_drag = (event.x, event.y)
-        self._pan_deferred = True
-
-    def _pan(self, event):
-        if not self.interactive:
-            return
-        if self._last_drag is None:
-            return
-        dx = event.x - self._last_drag[0]
-        dy = event.y - self._last_drag[1]
-        move_dy = 0 if self.lock_y_center else dy
-        self.canvas.move('all', dx, move_dy)
-        self.canvas.move('fixed', -dx, -move_dy)
-        if move_dy != 0:
-            self.canvas.move('fixed_y', 0, -move_dy)
-        if dx != 0:
-            self.canvas.move('fixed_x', -dx, 0)
-        wx, wy = self.screen_to_world_delta(dx, dy)
-        self.center[0] += wx
-        if not self.lock_y_center:
-            self.center[1] += wy
-        self._last_drag = (event.x, event.y)
-
-    def _stop_pan(self, event):
-        if self._pan_deferred:
-            self._pan_deferred = False
-            self._last_drag = None
-            self.redraw()
-
-    def _start_rotate(self, event):
-        if not self.interactive:
-            return
-        self._last_rotate = (event.x, event.y)
-
-    def _rotate_drag(self, event):
-        if not self.interactive:
-            return
-        if not self.rotate_enabled or self._last_rotate is None:
-            return
-        width = max(1, self.canvas.winfo_width())
-        height = max(1, self.canvas.winfo_height())
-        cx = width / 2
-        cy = height / 2
-        a0 = math.atan2(self._last_rotate[1] - cy, self._last_rotate[0] - cx)
-        a1 = math.atan2(event.y - cy, event.x - cx)
-        self.rotation += a1 - a0
-        self._last_rotate = (event.x, event.y)
-        self.redraw()
+    def export_image(self, filepath):
+        exporter = pyqtgraph.exporters.ImageExporter(self.getPlotItem())
+        exporter.export(str(filepath))

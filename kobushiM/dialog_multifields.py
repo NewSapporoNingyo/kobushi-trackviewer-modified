@@ -14,70 +14,90 @@
     limitations under the License.
 '''
 
-import tkinter as tk
-from tkinter import ttk
+from PyQt6 import QtCore, QtWidgets
+
 from . import i18n
 
-class dialog_multifields(ttk.Frame):
+
+class _FieldAccessor:
+    def __init__(self, widget, field_type):
+        self.widget = widget
+        self.field_type = field_type
+
+    def get(self):
+        if self.field_type == 'str':
+            return self.widget.text()
+        return self.widget.value()
+
+    def set(self, value):
+        if self.field_type == 'str':
+            self.widget.setText(str(value))
+        else:
+            self.widget.setValue(float(value))
+
+
+class dialog_multifields:
     def __init__(self, mainwindow, variable, title=None, message=None):
         self.mainwindow = mainwindow
-        self.master = tk.Toplevel(self.mainwindow)
-        super().__init__(self.master, padding='3 3 3 3')
-        if title != None:
-            self.master.title(title)
-        else:
-            self.master.title('')
-        self.master.columnconfigure(0, weight=1)
-        self.master.rowconfigure(0, weight=1)
-        self.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
-        self.create_widgets(variable, message)
-        self.master.bind("<Return>", self.clickOk)
-        self.master.bind("<Escape>", self.clickCancel)
-        
-        self.result = False
-        
-        self.master.focus_set()
-        self.master.grab_set()
-        self.master.transient(self.mainwindow)
-        self.master.wait_window()
-    def create_widgets(self,variable,message):
         self.variables = {}
         self.entries = {}
         self.labels = {}
-        
-        if message != None:
-            self.message_label = ttk.Label(self,text = message)
-            self.message_label.grid(column=0, row=0, sticky=(tk.W,tk.N))
-        
-        self.entry_frame = ttk.Frame(self, padding='3 3 3 3')
-        self.entry_frame.grid(column=0, row=1, sticky=(tk.N))
-        
-        ix=0
-        for key in variable:
-            if key['type'] == 'str':
-                self.variables[key['name']] = tk.StringVar()
+        self.result = False
+
+        self.dialog = QtWidgets.QDialog(mainwindow)
+        self.dialog.setWindowTitle(title or '')
+        self.dialog.setModal(True)
+
+        layout = QtWidgets.QVBoxLayout(self.dialog)
+        if message is not None:
+            label = QtWidgets.QLabel(message)
+            label.setWordWrap(True)
+            layout.addWidget(label)
+
+        form = QtWidgets.QFormLayout()
+        layout.addLayout(form)
+
+        for field in variable:
+            name = field['name']
+            field_type = field.get('type', 'str')
+            self.labels[name] = QtWidgets.QLabel(field.get('label', name))
+            if field_type == 'str':
+                widget = QtWidgets.QLineEdit()
+                widget.setText(str(field.get('default', '')))
             else:
-                self.variables[key['name']] = tk.DoubleVar()
-            self.labels[key['name']] = ttk.Label(self.entry_frame,text = key['label'])
-            self.labels[key['name']].grid(column=0, row=ix, sticky=(tk.W))
-            self.entries[key['name']] = ttk.Entry(self.entry_frame,textvariable=self.variables[key['name']],width=7)
-            self.entries[key['name']].grid(column=1, row=ix, sticky=(tk.E))
-            self.variables[key['name']].set(key['default'])
-            ix+=1
-        
-        self.button_frame = ttk.Frame(self, padding='3 3 3 3')
-        self.button_frame.grid(column=0, row=2, sticky=(tk.E,tk.W))
-        self.button_ok = ttk.Button(self.button_frame, text=i18n.get('button.ok'), command=self.clickOk)
-        self.button_ok.grid(column=0, row=0, sticky=(tk.S))
-        self.button_reset = ttk.Button(self.button_frame, text=i18n.get('button.reset'), command=self.clickreset)
-        self.button_reset.grid(column=1, row=0, sticky=(tk.S))
-        self.button_cancel = ttk.Button(self.button_frame, text=i18n.get('button.cancel'), command=self.clickCancel)
-        self.button_cancel.grid(column=2, row=0, sticky=(tk.S))
+                widget = QtWidgets.QDoubleSpinBox()
+                widget.setRange(-1e12, 1e12)
+                widget.setDecimals(6)
+                widget.setSingleStep(1.0)
+                widget.setValue(float(field.get('default', 0.0)))
+            self.entries[name] = widget
+            self.variables[name] = _FieldAccessor(widget, field_type)
+            form.addRow(self.labels[name], widget)
+
+        buttons = QtWidgets.QDialogButtonBox()
+        self.button_ok = buttons.addButton(i18n.get('button.ok'), QtWidgets.QDialogButtonBox.ButtonRole.AcceptRole)
+        self.button_reset = buttons.addButton(i18n.get('button.reset'), QtWidgets.QDialogButtonBox.ButtonRole.ResetRole)
+        self.button_cancel = buttons.addButton(i18n.get('button.cancel'), QtWidgets.QDialogButtonBox.ButtonRole.RejectRole)
+        layout.addWidget(buttons)
+
+        self.button_ok.clicked.connect(self.clickOk)
+        self.button_reset.clicked.connect(self.clickreset)
+        self.button_cancel.clicked.connect(self.clickCancel)
+
+        QtCore.QTimer.singleShot(0, self._focus_first_field)
+        self.dialog.exec()
+
+    def _focus_first_field(self):
+        if self.entries:
+            next(iter(self.entries.values())).setFocus()
+
     def clickOk(self, event=None):
         self.result = 'OK'
-        self.master.destroy()
+        self.dialog.accept()
+
     def clickreset(self, event=None):
         self.result = 'reset'
-        self.master.destroy()
+        self.dialog.accept()
+
     def clickCancel(self, event=None):
-        self.master.destroy()
+        self.dialog.reject()
