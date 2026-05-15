@@ -52,6 +52,8 @@ class PlotCanvas(ttk.Frame):
         self._last_drag = None
         self._last_rotate = None
         self._zoom_debounce_id = None
+        self._hq_debounce_id = None
+        self._interacting = False
         self._pan_deferred = False
 
         self.canvas = tk.Canvas(self, bg=self.background, highlightthickness=0)
@@ -68,6 +70,7 @@ class PlotCanvas(ttk.Frame):
         self.canvas.bind('<ButtonRelease-1>', self._stop_pan)
         self.canvas.bind('<ButtonPress-3>', self._start_rotate)
         self.canvas.bind('<B3-Motion>', self._rotate_drag)
+        self.canvas.bind('<ButtonRelease-3>', self._stop_rotate)
         self.canvas.bind('<Double-Button-1>', self.fit)
 
     def set_renderer(self, renderer, bounds=None, keep_view=True):
@@ -145,6 +148,19 @@ class PlotCanvas(ttk.Frame):
             self.renderer(self)
         if self.scalebar:
             self._draw_scalebar()
+
+    def is_interacting(self):
+        return self._interacting
+
+    def _schedule_hq_redraw(self):
+        if self._hq_debounce_id is not None:
+            self.after_cancel(self._hq_debounce_id)
+        self._hq_debounce_id = self.after(150, self._hq_redraw)
+
+    def _hq_redraw(self):
+        self._hq_debounce_id = None
+        self._interacting = False
+        self.redraw()
 
     def world_to_screen(self, x, y):
         dx = x - self.center[0]
@@ -519,29 +535,36 @@ class PlotCanvas(ttk.Frame):
     def _on_mousewheel(self, event):
         if not self.interactive:
             return
+        self._interacting = True
         factor = 1.15 if event.delta > 0 else 1 / 1.15
         self._zoom(factor, axis='x' if self.zoom_x_by_default else 'both')
         self._schedule_redraw()
+        self._schedule_hq_redraw()
 
     def _on_shift_mousewheel(self, event):
         if not self.interactive:
             return
+        self._interacting = True
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='y')
             self._schedule_redraw()
+            self._schedule_hq_redraw()
             return
         if self.rotate_enabled:
             self.rotation += math.radians(5 if event.delta > 0 else -5)
             self._schedule_redraw()
+            self._schedule_hq_redraw()
 
     def _on_control_mousewheel(self, event):
         if not self.interactive:
             return
+        self._interacting = True
         if self.independent_scale:
             factor = 1.15 if event.delta > 0 else 1 / 1.15
             self._zoom(factor, axis='both' if self.zoom_x_by_default else 'x')
             self._schedule_redraw()
+            self._schedule_hq_redraw()
 
     def _zoom(self, factor, axis='both'):
         self._view_fitted = True
@@ -565,6 +588,10 @@ class PlotCanvas(ttk.Frame):
     def _start_pan(self, event):
         if not self.interactive:
             return
+        self._interacting = True
+        if self._hq_debounce_id is not None:
+            self.after_cancel(self._hq_debounce_id)
+            self._hq_debounce_id = None
         self._last_drag = (event.x, event.y)
         self._pan_deferred = True
 
@@ -592,12 +619,20 @@ class PlotCanvas(ttk.Frame):
         if self._pan_deferred:
             self._pan_deferred = False
             self._last_drag = None
+            self._interacting = False
             self.redraw()
 
     def _start_rotate(self, event):
         if not self.interactive:
             return
+        self._interacting = True
+        if self._hq_debounce_id is not None:
+            self.after_cancel(self._hq_debounce_id)
+            self._hq_debounce_id = None
         self._last_rotate = (event.x, event.y)
+
+    def _stop_rotate(self, event):
+        self._schedule_hq_redraw()
 
     def _rotate_drag(self, event):
         if not self.interactive:

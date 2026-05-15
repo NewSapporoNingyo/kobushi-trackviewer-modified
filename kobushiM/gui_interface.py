@@ -121,6 +121,7 @@ class mainwindow(ttk.Frame):
         sys.stderr = LogInterceptor(sys.stderr, 'stderr', self._log_queue)
 
         self.bg_image_original = None
+        self.bg_image_thumbnail = None
         self.bg_image_tk = None
         self.bg_image_params = {
             'x': 0.0,
@@ -869,10 +870,24 @@ class mainwindow(ttk.Frame):
                     else:
                         modes = {'high': Image.LANCZOS, 'low': Image.NEAREST}
 
-                    is_panning = getattr(view, '_last_drag', None) is not None
-                    resample_mode = modes['low'] if is_panning else modes['high']
+                    interacting = view.is_interacting() and self.bg_image_thumbnail is not None
+                    if interacting:
+                        src_img = self.bg_image_thumbnail
+                        resample_mode = modes['low']
+                        thumb_w, thumb_h = src_img.size
+                        sx_t = thumb_w / orig_w
+                        sy_t = thumb_h / orig_h
+                        tcrop_xmin = max(0, int(crop_xmin * sx_t))
+                        tcrop_xmax = min(thumb_w, int(crop_xmax * sx_t))
+                        tcrop_ymin = max(0, int(crop_ymin * sy_t))
+                        tcrop_ymax = min(thumb_h, int(crop_ymax * sy_t))
+                        if tcrop_xmax <= tcrop_xmin or tcrop_ymax <= tcrop_ymin:
+                            return
+                        cropped_img = src_img.crop((tcrop_xmin, tcrop_ymin, tcrop_xmax, tcrop_ymax))
+                    else:
+                        cropped_img = self.bg_image_original.crop((crop_xmin, crop_ymin, crop_xmax, crop_ymax))
+                        resample_mode = modes['high']
 
-                    cropped_img = self.bg_image_original.crop((crop_xmin, crop_ymin, crop_xmax, crop_ymax))
                     resized_img = cropped_img.resize((target_px_w, target_px_h), resample_mode)
 
                     view_rot_deg = math.degrees(vp['rotation'])
@@ -1206,6 +1221,16 @@ class mainwindow(ttk.Frame):
         except Exception as e:
             tk.messagebox.showerror(message=i18n.get('dialog.bgimg_load_error', error=str(e)))
             return
+
+        thumb_max = 1024
+        ow, oh = self.bg_image_original.size
+        if max(ow, oh) > thumb_max:
+            ratio = thumb_max / max(ow, oh)
+            self.bg_image_thumbnail = self.bg_image_original.resize(
+                (int(ow * ratio), int(oh * ratio)),
+                Image.LANCZOS)
+        else:
+            self.bg_image_thumbnail = self.bg_image_original.copy()
 
         start_x, start_y = 0.0, 0.0
         if self.result is not None and hasattr(self.result, 'environment') and len(self.result.environment.owntrack_pos) > 0:
