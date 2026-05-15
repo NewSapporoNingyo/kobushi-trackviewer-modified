@@ -178,29 +178,10 @@ class _TrackViewBox(pg.ViewBox):
             center = self.sceneBoundingRect().center()
             p0 = ev.lastScenePos()
             p1 = ev.scenePos()
-            
-            # 记录旋转前视口中心对应的世界坐标
-            wc_x, wc_y = owner._display_to_world_point(owner.center[0], owner.center[1])
-            
             a0 = math.atan2(p0.y() - center.y(), p0.x() - center.x())
             a1 = math.atan2(p1.y() - center.y(), p1.x() - center.x())
             owner.rotation += a1 - a0
-            
-            # 计算同一世界坐标在新的旋转角度下的显示坐标
-            nd_x, nd_y = owner._world_to_display_point(wc_x, wc_y)
-            xr, yr = owner.viewRange()
-            xspan = xr[1] - xr[0]
-            yspan = yr[1] - yr[0]
-            
-            # 移动视口，让原来的世界坐标仍处于画面中心
-            owner._viewbox.setRange(
-                xRange=(nd_x - xspan / 2.0, nd_x + xspan / 2.0),
-                yRange=(nd_y - yspan / 2.0, nd_y + yspan / 2.0),
-                padding=0,
-            )
-            
-            # 使用定时器延迟重绘，彻底解决旋转时阻塞 UI 造成的卡顿问题
-            owner._redraw_timer.start(15)
+            owner.redraw()
             ev.accept()
             return
         super().mouseDragEvent(ev, axis=axis)
@@ -259,9 +240,6 @@ class PlotCanvas(pg.PlotWidget):
         self.plotItem.hideButtons()
         self.plotItem.setMenuEnabled(False)
         self.getViewBox().invertY(self.y_axis_down)
-        # 防止平面图（非独立缩放的画布）在调整窗口大小时被拉伸
-        if not self.independent_scale:
-            self.getViewBox().setAspectLocked(True)
         self._apply_mouse_enabled()
         self._set_axis_labels()
         self.canvas.bind('<Double-Button-1>', self.fit)
@@ -371,22 +349,10 @@ class PlotCanvas(pg.PlotWidget):
         xr, yr = self.viewRange()
         xspan = max(abs(xr[1] - xr[0]), 1e-9)
         yspan = max(abs(yr[1] - yr[0]), 1e-9)
-        
-        # 传入的通常为世界坐标，需转为显示坐标
-        if x is not None and y is not None:
-            cx, cy = self._world_to_display_point(x, y)
-        elif x is not None:
-            _, curr_wy = self._display_to_world_point(self.center[0], self.center[1])
-            cx, cy = self._world_to_display_point(x, curr_wy)
-        elif y is not None:
-            curr_wx, _ = self._display_to_world_point(self.center[0], self.center[1])
-            cx, cy = self._world_to_display_point(curr_wx, y)
-        else:
-            cx, cy = self.center[0], self.center[1]
-
+        cx = self.center[0] if x is None else float(x)
+        cy = self.center[1] if y is None else float(y)
         if self.lock_y_center:
             cy = 0.0
-            
         self._viewbox.setRange(
             xRange=(cx - xspan / 2.0, cx + xspan / 2.0),
             yRange=(cy - yspan / 2.0, cy + yspan / 2.0),
@@ -442,27 +408,35 @@ class PlotCanvas(pg.PlotWidget):
     def _world_to_display_point(self, x, y):
         if self.rotation == 0:
             return float(x), float(y)
+        cx, cy = self.center
+        dx = float(x) - cx
+        dy = float(y) - cy
         c = math.cos(self.rotation)
         s = math.sin(self.rotation)
-        return c * float(x) - s * float(y), s * float(x) + c * float(y)
+        return cx + c * dx - s * dy, cy + s * dx + c * dy
 
     def _display_to_world_point(self, x, y):
         if self.rotation == 0:
             return float(x), float(y)
+        cx, cy = self.center
+        dx = float(x) - cx
+        dy = float(y) - cy
         c = math.cos(self.rotation)
         s = math.sin(self.rotation)
-        # 逆旋转变换
-        return c * float(x) + s * float(y), -s * float(x) + c * float(y)
+        return cx + c * dx + s * dy, cy - s * dx + c * dy
 
     def _world_to_display_batch(self, points_np):
         pts = np.asarray(points_np, dtype=np.float64)
         if pts.size == 0 or self.rotation == 0:
             return pts
+        cx, cy = self.center
         c = math.cos(self.rotation)
         s = math.sin(self.rotation)
         out = pts.copy()
-        out[:, 0] = c * pts[:, 0] - s * pts[:, 1]
-        out[:, 1] = s * pts[:, 0] + c * pts[:, 1]
+        dx = pts[:, 0] - cx
+        dy = pts[:, 1] - cy
+        out[:, 0] = cx + c * dx - s * dy
+        out[:, 1] = cy + s * dx + c * dy
         return out
 
     def world_to_screen(self, x, y):
@@ -553,17 +527,12 @@ class PlotCanvas(pg.PlotWidget):
         screen_y_sign = 1 if vp['y_axis_down'] else -1
         sx_scale = vp['sx_scale']
         sy_scale = vp['sy_scale']
-        
-        # 绕绝对原点旋转
-        rx = c * pts[:, 0] - s * pts[:, 1]
-        ry = s * pts[:, 0] + c * pts[:, 1]
-        
-        # 再偏移相机中心
-        dx = rx - cx
-        dy = ry - cy
-        
-        sx = width / 2 + dx * sx_scale
-        sy = height / 2 + screen_y_sign * dy * sy_scale
+        dx = pts[:, 0] - cx
+        dy = pts[:, 1] - cy
+        rx = c * dx - s * dy
+        ry = s * dx + c * dy
+        sx = width / 2 + rx * sx_scale
+        sy = height / 2 + screen_y_sign * ry * sy_scale
         coords = np.empty(sx.size + sy.size, dtype=np.float64)
         coords[0::2] = sx
         coords[1::2] = sy
