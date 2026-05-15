@@ -186,9 +186,18 @@ class _TrackViewBox(pg.ViewBox):
             a1 = math.atan2(p1.y() - center.y(), p1.x() - center.x())
             owner.rotation += a1 - a0
             
-            # 【修改这里】：将计算新坐标和移动视口的操作推迟到 redraw 中执行
-            # 保证视口范围的变化和内容重绘绝对同步，消除旋转时的画面偏移错觉
-            owner._pending_rotation_center = (wc_x, wc_y)
+            # 计算同一世界坐标在新的旋转角度下的显示坐标
+            nd_x, nd_y = owner._world_to_display_point(wc_x, wc_y)
+            xr, yr = owner.viewRange()
+            xspan = xr[1] - xr[0]
+            yspan = yr[1] - yr[0]
+            
+            # 移动视口，让原来的世界坐标仍处于画面中心
+            owner._viewbox.setRange(
+                xRange=(nd_x - xspan / 2.0, nd_x + xspan / 2.0),
+                yRange=(nd_y - yspan / 2.0, nd_y + yspan / 2.0),
+                padding=0,
+            )
             
             # 使用定时器延迟重绘，彻底解决旋转时阻塞 UI 造成的卡顿问题
             owner._redraw_timer.start(15)
@@ -237,7 +246,6 @@ class PlotCanvas(pg.PlotWidget):
         self.text_color = '#ffffff'
         self.font_family = 'Sans Serif'
         self.center = [0.0, 0.0]
-        self._pending_rotation_center = None  # 【新增】：用于暂存旋转期间的中心点
         self.scale = 1.0
         self.scale_x = 1.0
         self.scale_y = 1.0
@@ -285,16 +293,6 @@ class PlotCanvas(pg.PlotWidget):
             self.setLabel('bottom', units=self.x_unit)
         if self.y_unit:
             self.setLabel('left', units=self.y_unit)
-            
-        # 【新增】：隐藏坐标轴的轴线，只保留刻度文字，并让其紧贴画布边缘
-        for ax_name in ['left', 'bottom']:
-            ax = self.getAxis(ax_name)
-            # 将坐标轴主线和外延刻度线颜色设为透明（隐藏）
-            ax.setPen(pg.mkPen(None))
-            # 确保刻度的文字颜色正常显示
-            ax.setTextPen(pg.mkColor(self.text_color))
-            # 刻度线长度设为 0，并将刻度文字向内偏移贴近边缘 (2像素)
-            ax.setStyle(tickLength=0, tickTextOffset=2)
 
     def eventFilter(self, obj, event):
         if obj is self.viewport():
@@ -402,21 +400,6 @@ class PlotCanvas(pg.PlotWidget):
         self.redraw()
 
     def redraw(self):
-        # 【新增】：在执行重绘前，先同步处理被挂起的视口旋转位移
-        if getattr(self, '_pending_rotation_center', None) is not None:
-            wc_x, wc_y = self._pending_rotation_center
-            self._pending_rotation_center = None
-            nd_x, nd_y = self._world_to_display_point(wc_x, wc_y)
-            xr, yr = self.viewRange()
-            xspan = max(abs(xr[1] - xr[0]), 1e-9)
-            yspan = max(abs(yr[1] - yr[0]), 1e-9)
-            self._viewbox.setRange(
-                xRange=(nd_x - xspan / 2.0, nd_x + xspan / 2.0),
-                yRange=(nd_y - yspan / 2.0, nd_y + yspan / 2.0),
-                padding=0,
-            )
-            self._sync_view_metrics()
-
         if self._in_redraw:
             return
         self._in_redraw = True
