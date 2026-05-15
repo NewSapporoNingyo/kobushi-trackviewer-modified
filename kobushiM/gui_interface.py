@@ -1541,11 +1541,16 @@ class mainwindow(ttk.Frame):
         self._align_pick1 = None
         self._align_pick2 = None
 
+        last_applied = [None]
+
         def on_apply():
-            self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=False)
+            key = (stn1_cb.get(), stn2_cb.get(), self._align_pick1, self._align_pick2)
+            if key != last_applied[0] and self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=False):
+                last_applied[0] = key
 
         def on_ok():
-            if self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=True):
+            key = (stn1_cb.get(), stn2_cb.get(), self._align_pick1, self._align_pick2)
+            if key == last_applied[0] or self._compute_and_apply_alignment(stn1_cb.get(), stn2_cb.get(), dialog, close_parent=True):
                 dialog.destroy()
                 parent_dialog.destroy()
 
