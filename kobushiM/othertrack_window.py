@@ -14,185 +14,102 @@
     limitations under the License.
 '''
 
-from PyQt6 import QtCore, QtGui, QtWidgets
-
+import tkinter as tk
+from tkinter import ttk
+import tkinter.simpledialog as simpledialog
+import tkinter.colorchooser as colorchooser
+from ttkwidgets import CheckboxTreeview
 from . import i18n
 
-
-class OtherTrackTree(QtWidgets.QTreeWidget):
-    def __init__(self, mainwindow, parent=None):
-        super().__init__(parent)
-        self.mainwindow = mainwindow
-        self._items = {}
-        self._root_item = None
-        self._updating = False
-        self.setColumnCount(4)
-        self.setSelectionMode(QtWidgets.QAbstractItemView.SelectionMode.SingleSelection)
-        self.header().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Stretch)
-        self.refresh_headers()
-        self.itemDoubleClicked.connect(self._edit_item)
-        self.itemChanged.connect(self._on_item_changed)
-
-    def refresh_headers(self):
-        self.setHeaderLabels([
-            i18n.get('tree.track_key'),
-            i18n.get('tree.from'),
-            i18n.get('tree.to'),
-            i18n.get('tree.color'),
-        ])
-
-    def exists(self, item_id):
-        return item_id == 'root' and self._root_item is not None
-
-    def delete(self, item_id):
-        if item_id == 'root':
-            self.clear()
-            self._items.clear()
-            self._root_item = None
-
-    def get_checked(self):
-        checked = []
-        for key, item in self._items.items():
-            if item.checkState(0) == QtCore.Qt.CheckState.Checked:
-                checked.append(key)
-        return checked
-
-    def set(self, key, column, value):
-        item = self._items.get(key)
-        if item is None:
-            return
-        col = self._column_index(column)
-        item.setText(col, str(value))
-
-    def tag_configure(self, key, foreground=None, **kwargs):
-        item = self._items.get(key)
-        if item is None or foreground is None:
-            return
-        color = QtGui.QColor(foreground)
-        for col in range(self.columnCount()):
-            item.setForeground(col, QtGui.QBrush(color))
-
-    def _check_ancestor(self, key):
-        item = self._items.get(key)
-        if item is not None:
-            old_updating = self._updating
-            self._updating = True
-            try:
-                item.setCheckState(0, QtCore.Qt.CheckState.Checked)
-            finally:
-                self._updating = old_updating
-
-    def populate(self):
-        self._updating = True
-        try:
-            self.clear()
-            self._items.clear()
-            self._root_item = QtWidgets.QTreeWidgetItem([i18n.get('tree.root'), '', '', ''])
-            self._root_item.setExpanded(True)
-            self.addTopLevelItem(self._root_item)
-
-            result = self.mainwindow.result
-            if result is None:
-                return
-            for key in result.othertrack.data.keys():
-                data = result.othertrack.data[key]
-                item = QtWidgets.QTreeWidgetItem([
-                    key,
-                    str(min(data, key=lambda x: x['distance'])['distance']),
-                    str(max(data, key=lambda x: x['distance'])['distance']),
-                    '###',
-                ])
-                item.setData(0, QtCore.Qt.ItemDataRole.UserRole, key)
-                item.setFlags(item.flags() | QtCore.Qt.ItemFlag.ItemIsUserCheckable)
-                item.setCheckState(0, QtCore.Qt.CheckState.Unchecked)
-                self._root_item.addChild(item)
-                self._items[key] = item
-                self.tag_configure(key, foreground=result.othertrack_linecolor[key]['current'])
-            self.expandAll()
-        finally:
-            self._updating = False
-
-    def _column_index(self, column):
-        if isinstance(column, int):
-            return column
-        return {'#0': 0, '#1': 1, '#2': 2, '#3': 3}.get(column, 0)
-
-    def _on_item_changed(self, item, column):
-        if self._updating or item is self._root_item:
-            return
-        if column == 0 and self.mainwindow.result is not None:
-            self.mainwindow.plot_all()
-
-    def _edit_item(self, item, column):
-        if item is self._root_item or self.mainwindow.result is None:
-            return
-        key = item.data(0, QtCore.Qt.ItemDataRole.UserRole)
-        if key is None:
-            return
-
-        if column == 3:
-            current = self.mainwindow.result.othertrack_linecolor[key]['current']
-            title = i18n.get(
-                'dialog.color_title',
-                trackkey=key,
-                color=self.mainwindow.result.othertrack_linecolor[key]['default'],
-            )
-            color = QtWidgets.QColorDialog.getColor(QtGui.QColor(current), self, title)
-            if color.isValid():
-                self.mainwindow.result.othertrack_linecolor[key]['current'] = color.name()
-                self.tag_configure(key, foreground=color.name())
-                self.mainwindow.plot_all()
-            return
-
-        if column not in (1, 2):
-            return
-        label = i18n.get('tree.from') if column == 1 else i18n.get('tree.to')
-        if column == 1:
-            default = min(self.mainwindow.result.othertrack.data[key], key=lambda x: x['distance'])['distance']
-        else:
-            default = max(self.mainwindow.result.othertrack.data[key], key=lambda x: x['distance'])['distance']
-        value, ok = QtWidgets.QInputDialog.getDouble(
-            self,
-            i18n.get('dialog.distance_title', trackkey=key),
-            i18n.get('dialog.distance_prompt', label=label, value=str(default)),
-            float(default),
-            -1e12,
-            1e12,
-            3,
-        )
-        if ok:
-            if column == 1:
-                self.mainwindow.result.othertrack.cp_range[key]['min'] = value
-            else:
-                self.mainwindow.result.othertrack.cp_range[key]['max'] = value
-            item.setText(column, str(value))
-            self.mainwindow.plot_all()
-
-
-class SubWindow(QtWidgets.QWidget):
+class SubWindow(ttk.Frame):
     def __init__(self, master, mainwindow):
-        super().__init__(mainwindow)
         self.mainwindow = mainwindow
         self.parent = master
-        self.setWindowFlag(QtCore.Qt.WindowType.Window, True)
-        self.setWindowTitle(i18n.get('window.othertracks'))
+        super().__init__(master, padding='3 3 3 3')
+        
+        self.mainwindow.tk.eval("""
+            ttk::style map Treeview \
+            -foreground {disabled SystemGrayText \
+                         selected SystemHighlightText} \
+            -background {disabled SystemButtonFace \
+                         selected SystemHighlight}
+        """)
+        
+        self.master.title(i18n.get('window.othertracks'))
+        self.master.columnconfigure(0, weight=1)
+        self.master.rowconfigure(0, weight=1)
+        self.grid(column=0, row=0,sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.columnconfigure(0,weight=1)
+        self.rowconfigure(0,weight=1)
         self.create_widgets()
-        self.resize(480, 360)
-        self.move(1100, 0)
-        self.show()
-
+        self.master.geometry('+1100+0')
     def create_widgets(self):
-        layout = QtWidgets.QVBoxLayout(self)
-        layout.setContentsMargins(3, 3, 3, 3)
-        self.othertrack_tree = OtherTrackTree(self.mainwindow, self)
-        layout.addWidget(self.othertrack_tree)
+        self.frame = ttk.Frame(self, padding=0)
+        self.frame.grid(sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.frame.columnconfigure(0,weight=1)
+        self.frame.rowconfigure(0,weight=1)
+        self.othertrack_tree = CheckboxTreeview(self.frame, show='tree headings', columns=['mindist', 'maxdist', 'linecolor'],selectmode='browse')
+        self.othertrack_tree.bind("<ButtonRelease>", self.click_tracklist)
+        self.othertrack_tree.grid(column=0, row=0, sticky=(tk.N, tk.W, tk.E, tk.S))
+        self.othertrack_tree.column('#0', width=200)
+        self.othertrack_tree.column('mindist', width=100)
+        self.othertrack_tree.column('maxdist', width=100)
+        self.othertrack_tree.column('linecolor', width=50)
+        self.othertrack_tree.heading('#0', text=i18n.get('tree.track_key'))
+        self.othertrack_tree.heading('mindist', text=i18n.get('tree.from'))
+        self.othertrack_tree.heading('maxdist', text=i18n.get('tree.to'))
+        self.othertrack_tree.heading('linecolor', text=i18n.get('tree.color'))
+        
+        self.ottree_scrollbar = ttk.Scrollbar(self.frame, orient=tk.VERTICAL, command=self.othertrack_tree.yview)
+        self.ottree_scrollbar.grid(column=1, row=0, sticky=(tk.N, tk.S, tk.E))
+        self.othertrack_tree.configure(yscrollcommand=self.ottree_scrollbar.set)
 
     def refresh_ui_text(self):
-        self.setWindowTitle(i18n.get('window.othertracks'))
-        self.othertrack_tree.refresh_headers()
+        self.master.title(i18n.get('window.othertracks'))
+        self.othertrack_tree.heading('#0', text=i18n.get('tree.track_key'))
+        self.othertrack_tree.heading('mindist', text=i18n.get('tree.from'))
+        self.othertrack_tree.heading('maxdist', text=i18n.get('tree.to'))
+        self.othertrack_tree.heading('linecolor', text=i18n.get('tree.color'))
 
     def click_tracklist(self, event=None):
+        columnlabel = { '#0': i18n.get('label.check'), '#1': i18n.get('tree.from'), '#2': i18n.get('tree.to'), '#3': i18n.get('tree.color')}
+        if event != None:
+            if getattr(event, 'widget').identify("element", event.x, event.y) == 'text':
+                clicked_column = self.othertrack_tree.identify_column(event.x)
+                clicked_track = self.othertrack_tree.identify_row(event.y)
+                if clicked_track == '\\':
+                    clicked_track = ''
+                if clicked_column in ['#1','#2','#3'] and clicked_track != 'root':
+                    if clicked_column == '#3':
+                        inputdata = colorchooser.askcolor(
+                            color=self.mainwindow.result.othertrack_linecolor[clicked_track]['current'],
+                            title=i18n.get('dialog.color_title', trackkey=clicked_track, color=self.mainwindow.result.othertrack_linecolor[clicked_track]['default']))
+                        if inputdata[1] != None:
+                            self.mainwindow.result.othertrack_linecolor[clicked_track]['current'] = inputdata[1]
+                            self.othertrack_tree.tag_configure(clicked_track,foreground=self.mainwindow.result.othertrack_linecolor[clicked_track]['current'])
+                    else:
+                        if clicked_column == '#1':
+                            defaultval = min(self.mainwindow.result.othertrack.data[clicked_track], key=lambda x: x['distance'])['distance']
+                        elif clicked_column == '#2':
+                            defaultval = max(self.mainwindow.result.othertrack.data[clicked_track], key=lambda x: x['distance'])['distance']
+                        inputdata = simpledialog.askfloat(
+                            i18n.get('dialog.distance_title', trackkey=clicked_track),
+                            i18n.get('dialog.distance_prompt', label=columnlabel[clicked_column], value=str(defaultval)))
+                        if inputdata != None:
+                            if clicked_column == '#1':
+                                self.mainwindow.result.othertrack.cp_range[clicked_track]['min'] = inputdata
+                            elif clicked_column == '#2':
+                                self.mainwindow.result.othertrack.cp_range[clicked_track]['max'] = inputdata
+                            self.othertrack_tree.set(clicked_track,clicked_column,inputdata)
         self.mainwindow.plot_all()
-
     def set_ottree_value(self):
-        self.othertrack_tree.populate()
+        if self.othertrack_tree.exists('root'):
+            self.othertrack_tree.delete('root')
+        self.othertrack_tree.insert("", "end", 'root', text='root', open=True)
+        colorix = 0
+        for i in self.mainwindow.result.othertrack.data.keys():
+            self.othertrack_tree.insert("root", "end", '\\' if i=='' else i, text=i, values=(min(self.mainwindow.result.othertrack.data[i], key=lambda x: x['distance'])['distance'],max(self.mainwindow.result.othertrack.data[i], key=lambda x: x['distance'])['distance'], '■■■'),tags=(i,))
+            # trackkey == '' (空文字列)の場合はidをバックスラッシュに置き換える。（他軌道ツリーのroot要素と重複するため）
+            self.othertrack_tree.tag_configure(i,foreground=self.mainwindow.result.othertrack_linecolor[i]['current'])
+        #self.subwindow.othertrack_tree.see('root')
+        #self.othertrack_tree.configure(yscrollcommand=self.ottree_scrollbar.set)

@@ -14,34 +14,61 @@
     limitations under the License.
 '''
 
-from PyQt6 import QtGui, QtWidgets
+import tkinter as tk
+from tkinter import ttk
+import tkinter.font as tkfont
+from . import i18n
 
-
-class FontControl:
+class FontControl():
     def __init__(self, master, mainwindow):
         self.mainwindow = mainwindow
+        self.master= None
         self.parent = master
-        self.fontname = QtWidgets.QApplication.font().family()
 
-    def create_window(self, event=None):
-        current = QtGui.QFont(self.fontname)
-        font, ok = QtWidgets.QFontDialog.getFont(current, self.mainwindow)
-        if ok:
-            self.fontname = font.family()
-            self.mainwindow.plot_all()
+        self.fonts = set(tkfont.families())
+        self.fonts.add('TkDefaultFont')
+        self.fontname = 'TkDefaultFont'
+
+        
+    def create_window(self,event=None):
+        if self.master is None:
+            self.master = tk.Toplevel(self.mainwindow)
+            self.master.title(i18n.get('window.font'))
+            self.master.protocol('WM_DELETE_WINDOW', self.closewindow)
+            self.master.focus_set()
+        
+            self.frame = ttk.Frame(self.master, padding=5)
+            self.frame.grid(sticky=(tk.N, tk.W, tk.E, tk.S))
+            self.frame.columnconfigure(0,weight=1)
+            self.frame.rowconfigure(0,weight=1)
+            self.combobox = ttk.Combobox(self.frame, width=30,values=sorted(self.fonts))
+            self.combobox.grid(column=0,row=0)
+            self.combobox.set(self.fontname)
+
+
+            self.subframe = ttk.Frame(self.frame, padding=5)
+            self.subframe.grid(column=0,row=1,sticky=(tk.N, tk.W, tk.E, tk.S))
+            self.ok_button = ttk.Button(self.subframe, text=i18n.get('button.ok'), command=self.ok_close)
+            self.ok_button.grid(column=0,row=0)
+            self.cancel_button = ttk.Button(self.subframe, text=i18n.get('button.cancel'), command=self.closewindow)
+            self.cancel_button.grid(column=1,row=0)
 
     def refresh_ui_text(self):
-        return None
-
+        if self.master is not None:
+            self.master.title(i18n.get('window.font'))
+            self.ok_button.config(text=i18n.get('button.ok'))
+            self.cancel_button.config(text=i18n.get('button.cancel'))
     def closewindow(self):
-        return None
-
+        self.master.withdraw()
+        self.master = None
     def ok_close(self):
+        self.fontname = self.combobox.get()
+        self.closewindow()
         self.mainwindow.plot_all()
-
     def set_fontname(self, font):
-        if font:
-            self.fontname = font
-
+        self.fontname = font
     def get_fontname(self):
         return self.fontname
+        
+        
+        
