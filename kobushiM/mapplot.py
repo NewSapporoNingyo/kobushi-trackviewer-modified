@@ -32,15 +32,21 @@ class Mapplot():
 
         self.environment.othertrack_pos = {}
         othertrack_keys = list(self.environment.othertrack.data.keys())
-        # 优化：使用 ProcessPoolExecutor 替代 ThreadPoolExecutor 以突破 GIL 限制，加速计算密集型任务
-        with ProcessPoolExecutor() as executor:
-            futures = {
-                executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key 
-                for key in othertrack_keys
-            }
-            for future in as_completed(futures):
-                key = futures[future]
-                self.environment.othertrack_pos[key] = future.result()
+        # 优化：小规模轨道在主线程直接计算，避免进程池的序列化开销
+        # 对于 1-2 条轨道或数据点极少的轨道，不使用 ProcessPoolExecutor
+        if len(othertrack_keys) <= 2:
+            for key in othertrack_keys:
+                gen = tgen.OtherTrackGenerator(self.environment, key)
+                self.environment.othertrack_pos[key] = gen.generate()
+        else:
+            with ProcessPoolExecutor() as executor:
+                futures = {
+                    executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key
+                    for key in othertrack_keys
+                }
+                for future in as_completed(futures):
+                    key = futures[future]
+                    self.environment.othertrack_pos[key] = future.result()
 
         self.distrange = {}
         self.distrange['plane'] = [
