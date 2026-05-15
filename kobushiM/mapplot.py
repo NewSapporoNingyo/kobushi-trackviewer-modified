@@ -15,7 +15,6 @@
 '''
 
 import numpy as np
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from . import trackgenerator as tgen
 from . import i18n
 
@@ -30,17 +29,8 @@ class Mapplot():
         self.environment.owntrack_pos = trackgenerator.generate_owntrack()
         self.environment.owntrack_curve = trackgenerator.generate_curveradius_dist()
 
+        # 初始化为空字典，在此不预先计算他轨道，改为在绘图时按需懒加载
         self.environment.othertrack_pos = {}
-        othertrack_keys = list(self.environment.othertrack.data.keys())
-        # 优化：使用 ProcessPoolExecutor 替代 ThreadPoolExecutor 以突破 GIL 限制，加速计算密集型任务
-        with ProcessPoolExecutor() as executor:
-            futures = {
-                executor.submit(tgen.OtherTrackGenerator(self.environment, key).generate): key 
-                for key in othertrack_keys
-            }
-            for future in as_completed(futures):
-                key = futures[future]
-                self.environment.othertrack_pos[key] = future.result()
 
         self.distrange = {}
         self.distrange['plane'] = [
@@ -89,6 +79,13 @@ class Mapplot():
         if othertrack_list is not None:
             for key in othertrack_list:
                 key = '' if key == '\\' else key
+
+                # --- 按需计算（懒加载）逻辑 ---
+                if key not in self.environment.othertrack_pos:
+                    gen = tgen.OtherTrackGenerator(self.environment, key)
+                    self.environment.othertrack_pos[key] = gen.generate()
+                # ------------------------------
+
                 othertrack = self.environment.othertrack_pos[key]
                 othertrack = self._distance_filter(
                     othertrack,
@@ -143,6 +140,13 @@ class Mapplot():
         if othertrack_list is not None:
             for key in othertrack_list:
                 key = '' if key == '\\' else key
+
+                # --- 按需计算（懒加载）逻辑 ---
+                if key not in self.environment.othertrack_pos:
+                    gen = tgen.OtherTrackGenerator(self.environment, key)
+                    self.environment.othertrack_pos[key] = gen.generate()
+                # ------------------------------
+
                 othertrack = self.environment.othertrack_pos[key]
                 othertrack = self._distance_filter(
                     othertrack,

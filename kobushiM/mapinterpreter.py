@@ -177,6 +177,7 @@ class ParseMap(Transformer):
             self.environment.rootpath = rootpath_tmp
             
         try: #構文解析
+            print('Parsing syntax tree...')
             tree = self.parser.parse(filebuffer)
         except Exception as e:
             raise RuntimeError('ParseError: in file '+str(f_path)+'\n'+str(e))
@@ -185,6 +186,7 @@ class ParseMap(Transformer):
         #import pdb
         #pdb.set_trace()
         try: #ツリー処理
+            print('Interpreting map elements...')
             self.transform(tree)
         except Exception as e:
             raise RuntimeError('IntepretationError: in file '+str(f_path)+', distance='+str(self.environment.predef_vars['distance'])+'\n'+str(e))
@@ -192,6 +194,7 @@ class ParseMap(Transformer):
             
         
         if(self.isroot): # 最上層のマップファイルのロードが完了したら、データを距離でソート
+            print('Calculating track geometry and sorting distances...')
             self.environment.controlpoints.relocate()
             self.environment.own_track.relocate()
             self.environment.othertrack.relocate()

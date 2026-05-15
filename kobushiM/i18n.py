@@ -42,7 +42,7 @@ _translations = {
         'menu.open': '開く...',
         'menu.reload': '再読み込み',
         'menu.save_image': '画像を保存...',
-        'menu.save_trackdata': '走行位置情報を保存...',
+        'menu.save_trackdata': '線形情報を保存...',
         'menu.exit': '終了',
 
         'menu.controlpoints': '座標制御点...',
@@ -308,7 +308,7 @@ _translations = {
         'menu.open': '打开...',
         'menu.reload': '重新加载',
         'menu.save_image': '保存图像...',
-        'menu.save_trackdata': '保存走行位置数据...',
+        'menu.save_trackdata': '保存线形数据...',
         'menu.exit': '退出',
 
         'menu.controlpoints': '坐标控制点...',
