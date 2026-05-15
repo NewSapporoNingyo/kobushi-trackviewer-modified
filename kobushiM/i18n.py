@@ -14,26 +14,35 @@
     limitations under the License.
 '''
 
+# Language code constants for Japanese, English, and Simplified Chinese /
+# 日本語・英語・簡体字中国語の言語コード定数 /
+# 日语、英语、简体中文的语言代码常量
 _JA = 'ja'
 _EN = 'en'
 _ZH = 'zh'
 
+# Mapping of supported language codes to their display names /
+# サポート対象言語コードと表示名の対応表 /
+# 支持的语言代码与显示名称的映射
 SUPPORTED_LANGUAGES = {
     _JA: '日本語',
     _EN: 'English',
     _ZH: '简体中文',
 }
 
+# Master translation dictionary: stores UI text for each supported language /
+# 全翻訳辞書：各サポート言語のUIテキストを格納 /
+# 主翻译字典：存储每种支持语言的UI文本
 _translations = {
     _JA: {
         'lang.name': '日本語',
 
-        # Window titles
+        # Window titles / ウィンドウタイトル / 窗口标题
         'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': '他軌道の設定',
         'window.font': 'フォント',
 
-        # Menu
+        # Menu / メニュー / 菜单
         'menu.file': 'ファイル',
         'menu.options': 'オプション',
         'menu.help': 'ヘルプ',
@@ -53,17 +62,17 @@ _translations = {
         'menu.help_ref': 'ヘルプ...',
         'menu.about': 'Kobushiについて...',
 
-        # Buttons
+        # Buttons / ボタン / 按钮
         'button.open': '開く',
         'button.ok': 'OK',
         'button.reset': 'リセット',
         'button.cancel': 'キャンセル',
 
-        # Control panel
+        # Control panel / 操作パネル / 控制面板
         'frame.aux_info': '補助情報',
         'frame.chart_visibility': 'チャート表示',
 
-        # Checkboxes
+        # Checkboxes / チェックボックス / 复选框
         'chk.station_pos': '駅座標',
         'chk.station_name': '駅名',
         'chk.station_mileage': '駅位置程',
@@ -76,18 +85,18 @@ _translations = {
         'chk.gradient_graph': '縦断面図',
         'chk.curve_graph': '曲線半径図',
 
-        # Grid control
+        # Grid control / グリッド制御 / 网格控制
         'frame.grid': 'グリッド線',
         'grid.fixed': '固定',
         'grid.movable': '可動',
         'grid.none': '無',
 
-        # Mode selection
+        # Mode selection / モード選択 / 模式选择
         'frame.mode': 'モード選択',
         'mode.pan': '移動',
         'mode.measure': '測量',
 
-        # Info panel
+        # Info panel / 情報パネル / 信息面板
         'info.mileage': '里程',
         'info.elevation': '標高',
         'info.gradient': '勾配',
@@ -95,22 +104,22 @@ _translations = {
         'info.speedlimit': '制限速度',
         'info.no_limit': '制限なし',
 
-        # Station jump
+        # Station jump / 駅移動 / 车站跳转
         'label.station_jump': '駅移動',
 
-        # Canvas titles
+        # Canvas titles / キャンバス見出し / 画布标题
         'canvas.plan': '平面図',
         'canvas.profile': '縦断面図 / 標高',
         'canvas.radius': '曲線半径',
 
-        # Treeview headings
+        # Treeview headings / ツリービュー見出し / Treeview列标题
         'tree.track_key': 'track key',
         'tree.from': 'From',
         'tree.to': 'To',
         'tree.color': 'Color',
         'tree.root': 'root',
 
-        # Dialog messages
+        # Dialog messages / ダイアログメッセージ / 对话框消息
         'dialog.quit': 'Kobushi Track Viewerを終了しますか？',
         'dialog.station_not_found': '{value} はこのmap上に見つかりませんでした',
         'dialog.set_plotlimit': '描画可能区間を設定\nmap range:{min},{max}',
@@ -127,10 +136,10 @@ _translations = {
         'dialog.distance_title': '{trackkey}: 距離程',
         'dialog.distance_prompt': '{label} (既定値: {value} m)',
 
-        # About dialog
+        # About dialog / バージョン情報 / 关于对话框
         'about.text': 'Kobushi trackviewer(Modified)\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
-        # Misc
+        # Misc / その他 / 杂项
         'unit.m': 'm',
         'unit.km': 'km',
         'label.lv': 'Lv.',
@@ -139,7 +148,7 @@ _translations = {
         'filetype.any': 'any format',
         'mileage.format': '{:.0f}m',
 
-        # Background image
+        # Background image / 背景画像 / 背景图片
         'frame.bgimage': '背景画像',
         'chk.bgimg_show': '表示',
         'button.import_bg': 'インポート',
@@ -169,10 +178,12 @@ _translations = {
     _EN: {
         'lang.name': 'English',
 
+        # Window titles / ウィンドウタイトル / 窗口标题
         'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': 'Other Tracks',
         'window.font': 'Font',
 
+        # Menu / メニュー / 菜单
         'menu.file': 'File',
         'menu.options': 'Options',
         'menu.help': 'Help',
@@ -192,14 +203,17 @@ _translations = {
         'menu.help_ref': 'Help...',
         'menu.about': 'About Kobushi...',
 
+        # Buttons / ボタン / 按钮
         'button.open': 'Open',
         'button.ok': 'OK',
         'button.reset': 'Reset',
         'button.cancel': 'Cancel',
 
+        # Control panel / 操作パネル / 控制面板
         'frame.aux_info': 'Auxiliary Info',
         'frame.chart_visibility': 'Chart Visibility',
 
+        # Checkboxes / チェックボックス / 复选框
         'chk.station_pos': 'Station Position',
         'chk.station_name': 'Station Name',
         'chk.station_mileage': 'Station Mileage',
@@ -212,15 +226,18 @@ _translations = {
         'chk.gradient_graph': 'Gradient Graph',
         'chk.curve_graph': 'Curve Graph',
 
+        # Grid control / グリッド制御 / 网格控制
         'frame.grid': 'Grid Lines',
         'grid.fixed': 'Fixed',
         'grid.movable': 'Movable',
         'grid.none': 'None',
 
+        # Mode selection / モード選択 / 模式选择
         'frame.mode': 'Mode',
         'mode.pan': 'Pan',
         'mode.measure': 'Measure',
 
+        # Info panel / 情報パネル / 信息面板
         'info.mileage': 'Mileage',
         'info.elevation': 'Elevation',
         'info.gradient': 'Gradient',
@@ -228,18 +245,22 @@ _translations = {
         'info.speedlimit': 'Speed Limit',
         'info.no_limit': 'No limit',
 
+        # Station jump / 駅移動 / 车站跳转
         'label.station_jump': 'Station Jump',
 
+        # Canvas titles / キャンバス見出し / 画布标题
         'canvas.plan': 'Plan',
         'canvas.profile': 'Gradient / Height',
         'canvas.radius': 'Curve Radius',
 
+        # Treeview headings / ツリービュー見出し / Treeview列标题
         'tree.track_key': 'track key',
         'tree.from': 'From',
         'tree.to': 'To',
         'tree.color': 'Color',
         'tree.root': 'root',
 
+        # Dialog messages / ダイアログメッセージ / 对话框消息
         'dialog.quit': 'Quit Kobushi Track Viewer?',
         'dialog.station_not_found': '{value} was not found on this map.',
         'dialog.set_plotlimit': 'Set Plot Limit\nmap range:{min},{max}',
@@ -256,8 +277,10 @@ _translations = {
         'dialog.distance_title': '{trackkey}: Distance',
         'dialog.distance_prompt': '{label} (default: {value} m)',
 
+        # About dialog / バージョン情報 / 关于对话框
         'about.text': 'Kobushi trackviewer(Modified)\nVersion {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\nReleased under the Apache License, Version 2.0 .\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
+        # Misc / その他 / 杂项
         'unit.m': 'm',
         'unit.km': 'km',
         'label.lv': 'Lv.',
@@ -266,7 +289,7 @@ _translations = {
         'filetype.any': 'any format',
         'mileage.format': '{:.0f}m',
 
-        # Background image
+        # Background image / 背景画像 / 背景图片
         'frame.bgimage': 'Background Image',
         'chk.bgimg_show': 'Show',
         'button.import_bg': 'Import',
@@ -296,10 +319,12 @@ _translations = {
     _ZH: {
         'lang.name': '简体中文',
 
+        # Window titles / ウィンドウタイトル / 窗口标题
         'app.title': 'Kobushi Track Viewer-Modified',
         'window.othertracks': '其他轨道设置',
         'window.font': '字体',
 
+        # Menu / メニュー / 菜单
         'menu.file': '文件',
         'menu.options': '选项',
         'menu.help': '帮助',
@@ -319,14 +344,17 @@ _translations = {
         'menu.help_ref': '帮助...',
         'menu.about': '关于 Kobushi...',
 
+        # Buttons / ボタン / 按钮
         'button.open': '打开',
         'button.ok': '确定',
         'button.reset': '重置',
         'button.cancel': '取消',
 
+        # Control panel / 操作パネル / 控制面板
         'frame.aux_info': '辅助信息',
         'frame.chart_visibility': '图表显示',
 
+        # Checkboxes / チェックボックス / 复选框
         'chk.station_pos': '车站坐标',
         'chk.station_name': '车站名称',
         'chk.station_mileage': '车站里程',
@@ -339,15 +367,18 @@ _translations = {
         'chk.gradient_graph': '纵断面图',
         'chk.curve_graph': '曲线半径图',
 
+        # Grid control / グリッド制御 / 网格控制
         'frame.grid': '网格线',
         'grid.fixed': '固定',
         'grid.movable': '可动',
         'grid.none': '无',
 
+        # Mode selection / モード選択 / 模式选择
         'frame.mode': '模式选择',
         'mode.pan': '移动',
         'mode.measure': '测量',
 
+        # Info panel / 情報パネル / 信息面板
         'info.mileage': '里程',
         'info.elevation': '标高',
         'info.gradient': '坡度',
@@ -355,18 +386,22 @@ _translations = {
         'info.speedlimit': '限速',
         'info.no_limit': '无',
 
+        # Station jump / 駅移動 / 车站跳转
         'label.station_jump': '车站跳转',
 
+        # Canvas titles / キャンバス見出し / 画布标题
         'canvas.plan': '平面图',
         'canvas.profile': '纵断面 / 标高',
         'canvas.radius': '曲线半径',
 
+        # Treeview headings / ツリービュー見出し / Treeview列标题
         'tree.track_key': '轨道编号',
         'tree.from': '起点',
         'tree.to': '终点',
         'tree.color': '颜色',
         'tree.root': '根',
 
+        # Dialog messages / ダイアログメッセージ / 对话框消息
         'dialog.quit': '确定要退出 Kobushi Track Viewer 吗？',
         'dialog.station_not_found': '在地图上未找到 {value}。',
         'dialog.set_plotlimit': '设置绘图区间\n地图范围：{min}～{max}',
@@ -383,8 +418,10 @@ _translations = {
         'dialog.distance_title': '{trackkey}：距离',
         'dialog.distance_prompt': '{label}（默认值：{value} m）',
 
+        # About dialog / バージョン情報 / 关于对话框
         'about.text': 'Kobushi trackviewer(Modified)\n版本 {version}\n\nCopyright © 2021-2024 konawasabi\nModified by Sapporo_ningyo\n基于 Apache License, Version 2.0 发布。\nhttps://www.apache.org/licenses/LICENSE-2.0',
 
+        # Misc / その他 / 杂项
         'unit.m': 'm',
         'unit.km': 'km',
         'label.lv': '水平',
@@ -393,7 +430,7 @@ _translations = {
         'filetype.any': '所有格式',
         'mileage.format': '{:.0f}m',
 
-        # Background image
+        # Background image / 背景画像 / 背景图片
         'frame.bgimage': '背景图片',
         'chk.bgimg_show': '显示',
         'button.import_bg': '导入',
@@ -422,11 +459,17 @@ _translations = {
     },
 }
 
+# Currently active language (default: Japanese) and callbacks for language change notification /
+# 現在のアクティブ言語（デフォルト: 日本語）と、言語変更通知用コールバックリスト /
+# 当前激活的语言（默认: 日语）和语言变更通知回调列表
 _current_lang = _JA
 _change_callbacks = []
 
 
 def get(key, **kwargs):
+    # Retrieve a localized string by key: lookup in current language, fallback to English, then key itself /
+    # キーで翻訳文字列を取得：現在の言語→英語→キーそのものの順にフォールバック /
+    # 通过键获取本地化字符串：依次在当前语言、英语、键本身中查找
     value = _translations.get(_current_lang, {}).get(key)
     if value is None:
         value = _translations[_EN].get(key, key)
@@ -436,6 +479,9 @@ def get(key, **kwargs):
 
 
 def set_language(lang):
+    # Switch the active language and notify all registered callbacks /
+    # アクティブ言語を切り替え、登録された全コールバックに通知 /
+    # 切换当前激活语言，并通知所有已注册的回调函数
     global _current_lang
     if lang in SUPPORTED_LANGUAGES:
         _current_lang = lang
@@ -444,8 +490,14 @@ def set_language(lang):
 
 
 def get_language():
+    # Return the currently active language code /
+    # 現在のアクティブ言語コードを返す /
+    # 返回当前激活的语言代码
     return _current_lang
 
 
 def on_language_change(callback):
+    # Register a callback that will be invoked whenever the language is changed /
+    # 言語変更時に呼び出されるコールバックを登録 /
+    # 注册一个在语言变更时会被调用的回调函数
     _change_callbacks.append(callback)
